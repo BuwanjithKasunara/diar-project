@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DIAR — Digital Identity Analysis &amp; Recommendation System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0C0F14;
+    --panel:#131822;
+    --panel-2:#171D28;
+    --line:#232B38;
+    --text:#E7EAF0;
+    --text-dim:#8B93A3;
+    --beacon:#E8A33D;     /* signal / active accent */
+    --match:#3FA796;      /* matched / positive */
+    --gap:#E2574C;        /* missing / gap */
+    --info:#5B8CFF;       /* neutral informational */
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(232,163,61,0.06), transparent 40%),
+      radial-gradient(circle at 85% 20%, rgba(91,140,255,0.05), transparent 45%);
+  }
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:var(--info);}
+
+  #app{max-width:1120px;margin:0 auto;padding:40px 24px 100px;}
+
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px;
+    gap:16px;flex-wrap:wrap;
+  }
+  header.top .eyebrow{
+    color:var(--beacon);font-family:'IBM Plex Mono',monospace;font-size:12px;
+    letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px;
+  }
+  header.top h1{
+    font-size:28px;margin:0;font-weight:600;line-height:1.25;letter-spacing:-0.01em;
+  }
+  header.top p{color:var(--text-dim);margin:8px 0 0;max-width:640px;font-size:14px;}
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--match);
+    border:1px solid rgba(63,167,150,0.35);background:rgba(63,167,150,0.08);
+    padding:6px 10px;border-radius:100px;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .status-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--match);box-shadow:0 0 8px var(--match);}
+  .status-pill.off{color:var(--gap);border-color:rgba(226,87,76,0.35);background:rgba(226,87,76,0.08);}
+  .status-pill.off .dot{background:var(--gap);box-shadow:0 0 8px var(--gap);}
+
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:24px;align-items:start;}
+  @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;
+  }
+  .panel + .panel{margin-top:20px;}
+  .panel h2{
+    font-size:13px;margin:0 0 16px;font-family:'IBM Plex Mono',monospace;
+    text-transform:uppercase;letter-spacing:0.1em;color:var(--text-dim);
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel h2 .n{color:var(--beacon);}
+
+  label{display:block;font-size:12.5px;color:var(--text-dim);margin:16px 0 6px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], input[type=file], textarea, select{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:inherit;
+    transition:border-color .15s ease;
+  }
+  input[type=text]:focus, textarea:focus, select:focus{
+    outline:none;border-color:var(--beacon);
+  }
+  textarea{resize:vertical;min-height:90px;}
+  select{appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position:calc(100% - 18px) calc(1.15em), calc(100% - 13px) calc(1.15em);background-size:5px 5px, 5px 5px;background-repeat:no-repeat;}
+  .hint{font-size:11px;color:var(--text-dim);margin-top:5px;line-height:1.5;}
+  .radio-row{display:flex;gap:8px;margin-top:6px;}
+  .radio-opt{
+    flex:1;text-align:center;padding:10px 6px;border:1px solid var(--line);border-radius:8px;
+    font-size:12px;cursor:pointer;color:var(--text-dim);background:var(--panel-2);
+    transition:all .15s ease;
+  }
+  .radio-opt.active{border-color:var(--beacon);color:var(--beacon);background:rgba(232,163,61,0.08);}
+
+  button.run{
+    width:100%;margin-top:22px;padding:13px;border:none;border-radius:8px;
+    background:var(--beacon);color:#1A1206;font-weight:600;font-size:14px;cursor:pointer;
+    font-family:'Space Grotesk',sans-serif;letter-spacing:0.01em;
+    transition:transform .1s ease, box-shadow .15s ease;
+  }
+  button.run:hover{box-shadow:0 0 0 3px rgba(232,163,61,0.18);}
+  button.run:active{transform:scale(0.99);}
+  button.run:disabled{opacity:0.5;cursor:default;}
+  .error-box{margin-top:14px;padding:10px 12px;border:1px solid rgba(226,87,76,0.4);
+    background:rgba(226,87,76,0.08);border-radius:8px;color:#F3A69F;font-size:12.5px;}
+
+  .empty{
+    border:1px dashed var(--line);border-radius:var(--radius);padding:60px 24px;
+    text-align:center;color:var(--text-dim);
+  }
+  .empty .glyph{font-size:32px;margin-bottom:14px;opacity:0.6;}
+  .empty h3{color:var(--text);font-family:'Space Grotesk',sans-serif;font-weight:600;margin:0 0 8px;}
+  .empty p{font-size:13px;max-width:360px;margin:0 auto;line-height:1.6;}
+
+  .loading{display:flex;align-items:center;gap:12px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:60px 0;justify-content:center;}
+  .spinner{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--beacon);animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .score-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
+  .score-card{
+    flex:1;min-width:140px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;padding:14px 16px;
+  }
+  .score-card .label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;font-family:'IBM Plex Mono',monospace;}
+  .score-card .val{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;margin-top:6px;text-transform:capitalize;}
+  .bar-track{height:5px;background:var(--line);border-radius:100px;margin-top:10px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:100px;}
+
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .chip{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:4px 9px;border-radius:100px;
+    border:1px solid var(--line);color:var(--text-dim);
+  }
+  .chip.match{color:var(--match);border-color:rgba(63,167,150,0.35);background:rgba(63,167,150,0.08);}
+  .chip.gap{color:var(--gap);border-color:rgba(226,87,76,0.35);background:rgba(226,87,76,0.08);}
+
+  .subhead{font-size:12px;color:var(--text-dim);margin:18px 0 8px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;}
+  .subhead:first-child{margin-top:0;}
+
+  .narrative{font-size:13.5px;line-height:1.75;color:var(--text);background:var(--panel-2);
+    border-left:2px solid var(--beacon);padding:14px 16px;border-radius:0 8px 8px 0;}
+
+  .rec-item{
+    display:grid;grid-template-columns:28px 1fr;gap:12px;padding:14px 0;
+    border-top:1px solid var(--line);
+  }
+  .rec-item:first-child{border-top:none;}
+  .rec-rank{font-family:'IBM Plex Mono',monospace;color:var(--text-dim);font-size:13px;padding-top:1px;}
+  .rec-title{font-size:14px;font-weight:600;font-family:'Space Grotesk',sans-serif;}
+  .rec-meta{display:flex;align-items:center;gap:8px;margin-top:4px;}
+  .prio{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;
+    padding:2px 7px;border-radius:4px;}
+  .prio.high{color:var(--gap);background:rgba(226,87,76,0.12);}
+  .prio.medium{color:var(--beacon);background:rgba(232,163,61,0.12);}
+  .prio.low{color:var(--info);background:rgba(91,140,255,0.12);}
+  .rule-id{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-dim);}
+  .rec-explain{font-size:12.5px;color:var(--text-dim);margin-top:6px;line-height:1.6;
+    border-left:2px solid var(--line);padding-left:10px;}
+
+  .visibility-note{font-size:12.5px;color:var(--text-dim);line-height:1.7;padding:4px 0;}
+  .visibility-note::before{content:"→ ";color:var(--beacon);}
+
+  footer{margin-top:60px;text-align:center;color:var(--text-dim);font-size:11.5px;font-family:'IBM Plex Mono',monospace;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="app"></div>
+
+<script>
+"use strict";
+
+var API_BASE = window.DIAR_API_BASE || "http://localhost:8000";
+
+var state = {
+  benchmarks: [],
+  visibilityLevels: ["Fully Public", "Semi-Public", "Privacy Focused"],
+  benchmark: "",
+  visibility: "",
+  githubUsername: "",
+  linkedinText: "",
+  resumeFile: null,
+  loading: false,
+  error: null,
+  report: null,
+  apiOnline: null
+};
+
+function el(tag, attrs, children) {
+  var node = document.createElement(tag);
+  attrs = attrs || {};
+  for (var key in attrs) {
+    if (key === "class") node.className = attrs[key];
+    else if (key === "html") node.innerHTML = attrs[key];
+    else if (key.indexOf("on") === 0 && typeof attrs[key] === "function") {
+      node.addEventListener(key.slice(2).toLowerCase(), attrs[key]);
+    } else {
+      node.setAttribute(key, attrs[key]);
+    }
+  }
+  (children || []).forEach(function (child) {
+    if (child === null || child === undefined) return;
+    if (typeof child === "string") node.appendChild(document.createTextNode(child));
+    else node.appendChild(child);
+  });
+  return node;
+}
+
+function escapeHtml(str) {
+  var d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
+}
+
+function scoreColor(pct) {
+  if (pct >= 66) return "var(--match)";
+  if (pct >= 33) return "var(--beacon)";
+  return "var(--gap)";
+}
+
+function scoreBar(value) {
+  var pct = Math.max(0, Math.min(1, value)) * 100;
+  var track = el("div", { class: "bar-track" }, []);
+  var fill = el("div", { class: "bar-fill" }, []);
+  fill.style.width = pct + "%";
+  fill.style.background = scoreColor(pct);
+  track.appendChild(fill);
+  return track;
+}
+
+function scoreCard(label, valueLabel, score) {
+  var card = el("div", { class: "score-card" }, [
+    el("div", { class: "label" }, [label]),
+    el("div", { class: "val" }, [valueLabel])
+  ]);
+  if (typeof score === "number") card.appendChild(scoreBar(score));
+  return card;
+}
+
+function chips(items, kind) {
+  if (!items || items.length === 0) {
+    return el("span", { class: "hint" }, ["None detected."]);
+  }
+  var row = el("div", { class: "chip-row" }, []);
+  items.forEach(function (s) {
+    row.appendChild(el("span", { class: "chip " + kind }, [s]));
+  });
+  return row;
+}
+
+function renderRecommendations(recs) {
+  if (!recs || recs.length === 0) {
+    return el("div", { class: "hint" }, ["No gaps detected against this benchmark — profile is well aligned."]);
+  }
+  var wrap = el("div", {}, []);
+  recs.forEach(function (r) {
+    var rank = el("div", { class: "rec-rank mono" }, [String(r.rank).padStart(2, "0")]);
+    var title = el("div", { class: "rec-title" }, [r.recommendation]);
+    var meta = el("div", { class: "rec-meta" }, [
+      el("span", { class: "prio " + r.priority }, [r.priority]),
+      el("span", { class: "rule-id" }, [r.rule_id])
+    ]);
+    var explain = el("div", { class: "rec-explain" }, [r.explanation]);
+    var body = el("div", {}, [title, meta, explain]);
+    wrap.appendChild(el("div", { class: "rec-item" }, [rank, body]));
+  });
+  return wrap;
+}
+
+function panel(children) {
+  return el("div", { class: "panel" }, children);
+}
+
+function h2(number, text, extra) {
+  var children = [el("span", { class: "n" }, [number]), " " + text];
+  if (extra) children.push(el("span", { style: "color:var(--text-dim);font-weight:400;" }, [extra]));
+  var heading = el("h2", {}, children);
+  if (extra) heading.lastChild.style.color = "var(--text-dim)";
+  return heading;
+}
+
+function subhead(text) {
+  return el("div", { class: "subhead" }, [text]);
+}
+
+function renderReport(report) {
+  var p = report.digital_identity_profile;
+  var bc = report.benchmark_comparison;
+  var ga = report.gap_analysis;
+  var va = report.visibility_assessment;
+
+  var container = el("div", {}, []);
+
+  // 01 Alignment scores
+  var scoreRow = el("div", { class: "score-row" }, [
+    scoreCard("Skill Match", ga.skill_match_label, ga.skill_match_score),
+    scoreCard("Profile Completeness", ga.profile_completeness_label, ga.profile_completeness_score),
+    scoreCard("GitHub Activity", ga.github_activity_label, ga.github_activity_score)
+  ]);
+  container.appendChild(panel([h2("01", "Digital Identity Alignment"), scoreRow]));
+
+  // 02 Benchmark comparison
+  container.appendChild(panel([
+    h2("02", "Benchmark Comparison — " + bc.benchmark_identity),
+    el("p", { class: "hint", style: "margin-bottom:14px;" }, [bc.benchmark_description]),
+    subhead("Matched Skills"), chips(bc.matched_skills, "match"),
+    subhead("Missing Required Skills"), chips(bc.missing_required_skills, "gap"),
+    subhead("Missing Preferred Skills"), chips(bc.missing_preferred_skills, "gap")
+  ]));
+
+  // 03 Visibility
+  var visContent = [h2("03", "Visibility Assessment — " + va.selected_level)];
+  if (!va.findings || va.findings.length === 0) {
+    visContent.push(el("div", { class: "hint" }, ["No visibility-related issues detected for this preference."]));
+  } else {
+    va.findings.forEach(function (f) {
+      visContent.push(el("div", { class: "visibility-note" }, [f]));
+    });
+  }
+  container.appendChild(panel(visContent));
+
+  // 04 Explanation
+  container.appendChild(panel([
+    h2("04", "Explanation Summary"),
+    el("div", { class: "narrative" }, [report.explanation_summary.narrative])
+  ]));
+
+  // 05 Recommendations
+  var recCount = report.recommendations.length;
+  container.appendChild(panel([
+    h2("05", "Recommendations", "(" + recCount + " action" + (recCount === 1 ? "" : "s") + ")"),
+    renderRecommendations(report.recommendations)
+  ]));
+
+  // 06 Consolidated profile
+  var profileContent = [
+    h2("06", "Consolidated Profile"),
+    subhead("Skills Detected (" + p.skills.length + ")"),
+    chips(p.skills, "match"),
+    subhead("Sources Used"),
+    el("div", { class: "chip-row" }, [
+      el("span", { class: "chip " + (p.completeness_flags.resume_provided ? "match" : "gap") }, ["resume " + (p.completeness_flags.resume_provided ? "✓" : "✗")]),
+      el("span", { class: "chip " + (p.completeness_flags.github_provided ? "match" : "gap") }, ["github " + (p.completeness_flags.github_provided ? "✓" : "✗")]),
+      el("span", { class: "chip " + (p.completeness_flags.linkedin_provided ? "match" : "gap") }, ["linkedin " + (p.completeness_flags.linkedin_provided ? "✓" : "✗")])
+    ])
+  ];
+  if (p.github && p.github.username) {
+    profileContent.push(subhead("GitHub — @" + p.github.username));
+    profileContent.push(el("div", { class: "hint" }, [
+      p.github.repo_count + " repositories · " + p.github.recently_active_repo_count +
+      " recently active · " + p.github.followers + " followers"
+    ]));
+  }
+  container.appendChild(panel(profileContent));
+
+  return container;
+}
+
+function renderResultsPanel() {
+  var results = document.getElementById("results");
+  results.innerHTML = "";
+
+  if (state.loading) {
+    results.appendChild(panel([
+      el("div", { class: "loading" }, [
+        el("div", { class: "spinner" }, []),
+        " running extraction, alignment & recommendation pipeline…"
+      ])
+    ]));
+    return;
+  }
+
+  if (!state.report) {
+    results.appendChild(el("div", { class: "empty" }, [
+      el("div", { class: "glyph" }, ["◎"]),
+      el("h3", { class: "display" }, ["No report yet"]),
+      el("p", {}, ["Fill in at least a resume, GitHub username, or LinkedIn text on the left, choose a benchmark identity and visibility level, then run the analysis to generate an explainable Digital Identity Report."])
+    ]));
+    return;
+  }
+
+  results.appendChild(renderReport(state.report));
+}
+
+function renderStatusPill() {
+  var pill = document.getElementById("status-pill");
+  pill.className = "status-pill" + (state.apiOnline === false ? " off" : "");
+  var label = state.apiOnline === null ? "checking api…" : state.apiOnline ? "api online" : "api offline — start the backend";
+  pill.innerHTML = '<span class="dot"></span>' + escapeHtml(label);
+}
+
+function renderBenchmarkOptions() {
+  var select = document.getElementById("benchmark-select");
+  select.innerHTML = "";
+  state.benchmarks.forEach(function (b) {
+    var opt = el("option", { value: b.name }, [b.name]);
+    select.appendChild(opt);
+  });
+  if (state.benchmark) select.value = state.benchmark;
+  var descEl = document.getElementById("benchmark-desc");
+  var current = state.benchmarks.filter(function (b) { return b.name === state.benchmark; })[0];
+  descEl.textContent = current ? current.description : "";
+}
+
+function renderVisibilityOptions() {
+  var row = document.getElementById("visibility-row");
+  row.innerHTML = "";
+  state.visibilityLevels.forEach(function (v) {
+    var opt = el("div", {
+      class: "radio-opt" + (state.visibility === v ? " active" : ""),
+      onClick: function () {
+        state.visibility = v;
+        renderVisibilityOptions();
+      }
+    }, [v]);
+    row.appendChild(opt);
+  });
+}
+
+function renderError() {
+  var box = document.getElementById("error-box");
+  box.innerHTML = "";
+  if (state.error) {
+    box.appendChild(el("div", { class: "error-box" }, [state.error]));
+  }
+}
+
+function renderRunButton() {
+  var btn = document.getElementById("run-btn");
+  var canSubmit = state.benchmark && state.visibility && !state.loading;
+  btn.disabled = !canSubmit;
+  btn.textContent = state.loading ? "Analysing…" : "Run Digital Identity Analysis";
+}
+
+async function checkHealth() {
+  try {
+    var res = await fetch(API_BASE + "/api/health");
+    state.apiOnline = res.ok;
+  } catch (e) {
+    state.apiOnline = false;
+  }
+  renderStatusPill();
+}
+
+async function loadBenchmarks() {
+  try {
+    var res = await fetch(API_BASE + "/api/benchmarks");
+    var data = await res.json();
+    state.benchmarks = data;
+    if (data.length) state.benchmark = data[0].name;
+  } catch (e) {
+    state.benchmarks = [];
+  }
+  renderBenchmarkOptions();
+  renderRunButton();
+}
+
+async function loadVisibilityLevels() {
+  try {
+    var res = await fetch(API_BASE + "/api/visibility-levels");
+    var data = await res.json();
+    if (data && data.length) {
+      state.visibilityLevels = data;
+      state.visibility = data.indexOf("Semi-Public") >= 0 ? "Semi-Public" : data[0];
+    }
+  } catch (e) {
+    state.visibility = "Semi-Public";
+  }
+  renderVisibilityOptions();
+  renderRunButton();
+}
+
+async function runAnalysis(e) {
+  e.preventDefault();
+  state.loading = true;
+  state.error = null;
+  state.report = null;
+  renderResultsPanel();
+  renderError();
+  renderRunButton();
+
+  try {
+    var form = new FormData();
+    form.append("benchmark_identity", state.benchmark);
+    form.append("visibility_level", state.visibility);
+    if (state.githubUsername.trim()) form.append("github_username", state.githubUsername.trim());
+    form.append("linkedin_text", state.linkedinText || "");
+    if (state.resumeFile) form.append("resume", state.resumeFile);
+
+    var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form });
+    if (!res.ok) {
+      var errData = {};
+      try { errData = await res.json(); } catch (e2) {}
+      throw new Error(errData.detail || ("Request failed with status " + res.status));
+    }
+    var data = await res.json();
+    state.report = data;
+  } catch (err) {
+    state.error = err.message || "Something went wrong while analysing this profile.";
+  } finally {
+    state.loading = false;
+    renderResultsPanel();
+    renderError();
+    renderRunButton();
+  }
+}
+
+function buildLayout() {
+  var app = document.getElementById("app");
+
+  var header = el("header", { class: "top" }, [
+    el("div", {}, [
+      el("div", { class: "eyebrow" }, ["DIAR · Digital Identity Analysis & Recommendation System"]),
+      el("h1", { class: "display" }, ["Align your digital identity to where you're headed."]),
+      el("p", {}, ["Feed in a resume, GitHub profile, and LinkedIn text. Pick who you're aiming to become and how visible you want to be. The engine traces every recommendation back to a rule."])
+    ]),
+    el("div", { class: "status-pill", id: "status-pill" }, [
+      el("span", { class: "dot" }, []), "checking api…"
+    ])
+  ]);
+  app.appendChild(header);
+
+  var grid = el("div", { class: "grid" }, []);
+  app.appendChild(grid);
+
+  // Left column: form
+  var left = el("div", {}, []);
+  var form = el("form", { class: "panel", id: "analyze-form" }, [
+    el("h2", {}, ["Input Sources"]),
+
+    el("label", {}, ["Resume (PDF)"]),
+    el("input", {
+      type: "file", accept: "application/pdf",
+      onChange: function (e) { state.resumeFile = e.target.files[0] || null; }
+    }, []),
+    el("div", { class: "hint" }, ["Extracted via the Information Extraction Module (NLP text classification)."]),
+
+    el("label", {}, ["GitHub Username"]),
+    el("input", {
+      type: "text", placeholder: "e.g. octocat",
+      onInput: function (e) { state.githubUsername = e.target.value; }
+    }, []),
+    el("div", { class: "hint" }, ["Pulled live from the public GitHub API — repos, languages, activity."]),
+
+    el("label", {}, ["LinkedIn Profile Text"]),
+    el("textarea", {
+      placeholder: "Paste your headline, about section, skills, and experience…",
+      onInput: function (e) { state.linkedinText = e.target.value; }
+    }, []),
+    el("div", { class: "hint" }, ["LinkedIn has no public scraping API — paste the relevant sections."]),
+
+    el("label", {}, ["Benchmark Identity"]),
+    el("select", { id: "benchmark-select", onChange: function (e) { state.benchmark = e.target.value; renderBenchmarkOptions(); } }, []),
+    el("div", { class: "hint", id: "benchmark-desc" }, []),
+
+    el("label", {}, ["Preferred Visibility Level"]),
+    el("div", { class: "radio-row", id: "visibility-row" }, []),
+
+    el("button", { class: "run", type: "submit", id: "run-btn" }, ["Run Digital Identity Analysis"]),
+
+    el("div", { id: "error-box" }, [])
+  ]);
+  form.addEventListener("submit", runAnalysis);
+  left.appendChild(form);
+  grid.appendChild(left);
+
+  // Right column: results
+  var right = el("div", { id: "results" }, []);
+  grid.appendChild(right);
+
+  var footer = el("footer", {}, ["DIAR PROTOTYPE · Rule-Based Reasoning + Fuzzy Logic + NLP · Academic AI Project"]);
+  app.appendChild(footer);
+}
+
+buildLayout();
+renderResultsPanel();
+renderRunButton();
+checkHealth();
+loadBenchmarks();
+loadVisibilityLevels();
+</script>
+</body>
+</html>

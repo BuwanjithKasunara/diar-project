@@ -1,0 +1,52 @@
+{
+  "AI Engineer": {
+    "description": "Builds and deploys machine learning / AI systems in production.",
+    "required_skills": ["python", "machine learning", "deep learning", "tensorflow", "pytorch", "sql"],
+    "preferred_skills": ["nlp", "computer vision", "docker", "kubernetes", "mlops", "aws", "fastapi", "scikit-learn"],
+    "certifications": ["tensorflow developer certificate", "aws certified machine learning", "deep learning specialization"],
+    "expected_project_keywords": ["machine learning", "neural network", "model", "dataset", "training", "ai", "prediction", "classification"],
+    "min_experience_years": 1,
+    "min_github_repos": 4,
+    "min_github_languages": 2
+  },
+  "Software Engineer": {
+    "description": "Designs, builds, and maintains scalable software systems and applications.",
+    "required_skills": ["python", "java", "javascript", "git", "sql", "data structures", "algorithms"],
+    "preferred_skills": ["react", "node.js", "docker", "aws", "microservices", "rest api", "ci/cd", "kubernetes"],
+    "certifications": ["aws certified developer", "oracle certified professional java", "microsoft certified azure developer"],
+    "expected_project_keywords": ["application", "system", "api", "backend", "frontend", "software", "web app"],
+    "min_experience_years": 1,
+    "min_github_repos": 5,
+    "min_github_languages": 2
+  },
+  "Data Scientist": {
+    "description": "Analyses data and builds statistical/ML models to generate insights and predictions.",
+    "required_skills": ["python", "sql", "statistics", "machine learning", "pandas", "numpy"],
+    "preferred_skills": ["r", "tableau", "power bi", "scikit-learn", "data visualization", "big data", "spark"],
+    "certifications": ["ibm data science professional certificate", "google data analytics certificate", "microsoft certified data analyst"],
+    "expected_project_keywords": ["data analysis", "dataset", "visualization", "prediction", "regression", "statistics", "insight"],
+    "min_experience_years": 1,
+    "min_github_repos": 3,
+    "min_github_languages": 2
+  },
+  "Researcher": {
+    "description": "Conducts academic or applied research, publishes findings, and advances knowledge in a technical field.",
+    "required_skills": ["python", "research methodology", "statistics", "academic writing", "literature review"],
+    "preferred_skills": ["latex", "matlab", "r", "data analysis", "experiment design", "peer review"],
+    "certifications": ["research methods certification", "responsible conduct of research"],
+    "expected_project_keywords": ["research", "study", "experiment", "publication", "analysis", "paper", "hypothesis"],
+    "min_experience_years": 0,
+    "min_github_repos": 2,
+    "min_github_languages": 1
+  },
+  "Entrepreneur": {
+    "description": "Builds and launches products or ventures, combining technical skill with business execution.",
+    "required_skills": ["product management", "business development", "communication", "leadership"],
+    "preferred_skills": ["marketing", "fundraising", "python", "javascript", "ui/ux", "financial modeling"],
+    "certifications": ["lean startup certification", "product management certificate"],
+    "expected_project_keywords": ["startup", "product", "launch", "business", "mvp", "venture", "customer"],
+    "min_experience_years": 0,
+    "min_github_repos": 2,
+    "min_github_languages": 1
+  }
+}
