@@ -45,3 +45,5 @@ Build source-preserved occupation baselines with:
 ```
 
 The output follows [`schema/occupation-benchmark-v1.schema.json`](schema/occupation-benchmark-v1.schema.json). ESCO essential/optional relations and O*NET raw rating scales remain distinct; the builder does not invent a common weight. This completes the deterministic dataset-design pipeline. Human-reviewed concept mappings and independently labelled knowledge-level outcomes are the remaining gates before XGBoost experimentation.
+
+The [annotation rubric](../docs/testing/annotation-rubric.md) describes the next local review stage. Run `scripts/data/prepare_annotation_batches.py` to create blind mapping and evidence-level packets under `data/annotation_batches/pilot_v1/`. The packet builder assigns no labels. Use `scripts/data/create_review_templates.py` for two blank reviewer files per task type, then `scripts/data/review_annotations.py` to validate completed independent reviews and prepare disagreement queues. All packets, reviewer answers, and internal manifests are ignored by Git.

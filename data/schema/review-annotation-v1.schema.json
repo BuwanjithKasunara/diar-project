@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diar.local/schemas/review-annotation-v1.schema.json",
+  "title": "DIAR independent review annotation v1",
+  "oneOf": [
+    {"$ref": "#/$defs/mappingAnnotation"},
+    {"$ref": "#/$defs/levelAnnotation"}
+  ],
+  "$defs": {
+    "common": {
+      "type": "object",
+      "required": ["annotation_version", "kind", "task_id", "task_digest", "reviewer_id", "rationale"],
+      "properties": {
+        "annotation_version": {"const": "1.0.0"},
+        "task_id": {"type": "string", "minLength": 1},
+        "task_digest": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+        "reviewer_id": {"type": "string", "minLength": 2, "maxLength": 100},
+        "rationale": {"type": "string", "minLength": 10, "maxLength": 2000}
+      }
+    },
+    "mappingAnnotation": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decision", "concept_ids"],
+          "properties": {
+            "annotation_version": {"const": "1.0.0"},
+            "kind": {"const": "mapping"},
+            "task_id": {"type": "string", "pattern": "^map-[0-9a-f]{20}$"},
+            "task_digest": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+            "reviewer_id": {"type": "string", "minLength": 2, "maxLength": 100},
+            "rationale": {"type": "string", "minLength": 10, "maxLength": 2000},
+            "decision": {"enum": ["single_match", "multiple_valid", "none", "needs_context"]},
+            "concept_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^(esco|onet):.+$"}
+            }
+          }
+        }
+      ]
+    },
+    "levelAnnotation": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "supporting_evidence_ids"],
+          "properties": {
+            "annotation_version": {"const": "1.0.0"},
+            "kind": {"const": "level"},
+            "task_id": {"type": "string", "pattern": "^lvl-[0-9a-f]{20}$"},
+            "task_digest": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+            "reviewer_id": {"type": "string", "minLength": 2, "maxLength": 100},
+            "rationale": {"type": "string", "minLength": 10, "maxLength": 2000},
+            "level": {
+              "enum": ["insufficient_evidence", "foundational", "applied", "advanced"]
+            },
+            "supporting_evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^ev-[0-9a-f]{16}$"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

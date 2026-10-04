@@ -28,6 +28,12 @@ The version 3 tests cover capability-group alternatives and isolation, evidence 
 
 Exact mapping measures lexical taxonomy coverage, not extractor accuracy, semantic equivalence, or proficiency. Ambiguous and unmatched claims are retained for review. The filtered-sample selection itself cannot yet be reproduced because its generator was not supplied.
 
+## Independent annotation pilot preparation
+
+The local packet builder produced 125 mapping tasks (50 ambiguous, 50 unmatched, 25 exact-match audit) and 50 profile-skill level tasks. The level tasks use 10 distinct profiles from each of five source groups; 25 have a direct skill mention in professional text and 25 require broader context review. Public task records contain no `profile_id`, `cohort`, `seniority`, `job_family`, `seed_role`, or `sample_group` fields. Two blank response templates were created per task type. `labels_assigned` is 0.
+
+After adding a task-content digest check and one additional mapping-validation case, the final focused annotation and concept-mapping run passed all 11 tests. The documentation checker reported 0 errors, and `git diff --check` completed without whitespace errors. No reviewer decisions, adjudications, or model-ready labels exist yet.
+
 ## Evaluation results
 
 Command: `.venv-dev/Scripts/python.exe scripts/evaluate.py`.

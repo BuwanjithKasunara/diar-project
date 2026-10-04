@@ -13,5 +13,7 @@ These are supplied work assignments, not verified authorship.
 
 The improvement working tree was prepared with coding-assistant support. Code, tests, documents, and [verification records](../testing/results/development-verification.md) establish work products. Individual student authorship has not been verified here.
 
+The dataset annotation stage has a [review rubric](../testing/annotation-rubric.md), versioned [annotation schema](../../data/schema/review-annotation-v1.schema.json), and local packet/reconciliation scripts. The pilot packets and blank response files are generated work products; they do not establish that any team member performed the independent reviews.
+
 Before submission, members must confirm actual tasks and references to commits, reviews, test records, or artifacts. Describe assistance accurately; never infer contribution from module ownership.
 

@@ -12,3 +12,5 @@ Evidence excerpts are truncated and exist to explain a match, not to reproduce s
 
 CORS is not authentication. No accounts or ownership enforcement exist; shared hosting is deferred. Deleting a row does not guarantee forensic erasure from database files or backups.
 
+Dataset annotation packets are generated from synthetic professional evidence and remain local under the ignored `data/annotation_batches/` directory. Public reviewer packets omit profile IDs and synthetic cohort, seniority, job family, seed role, and sample group. Internal manifests preserve those fields for audit and should not be shared with reviewers. Reviewer answers and rationales also remain local; they are not application reports and are not sent to GitHub or LinkedIn.
+

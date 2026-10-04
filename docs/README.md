@@ -29,6 +29,7 @@
 - [Planner](ai/recommendation-planner.md)
 - [Test strategy](testing/strategy.md)
 - [Dataset guide](testing/dataset-guide.md)
+- [Annotation rubric](testing/annotation-rubric.md)
 - [Verification results](testing/results/development-verification.md)
 - [Data handling](privacy/data-handling.md)
 - [Local demonstration](user-guide/local-demo.md)

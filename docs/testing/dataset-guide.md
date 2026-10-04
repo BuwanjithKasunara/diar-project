@@ -35,3 +35,7 @@ Run `python scripts/data/build_concept_catalog.py`, followed by `python scripts/
 ## Occupation benchmarks
 
 Run `python scripts/data/build_occupation_benchmarks.py` after building the concept catalogue. The output stores ESCO and O*NET occupations separately. It preserves ESCO essential/optional relationships, O*NET importance/level values, source suppression and relevance flags, and software examples. It does not normalize the two taxonomies to a shared score. See [ADR 0011](../adr/0011-source-preserved-occupation-benchmarks.md).
+
+## Independent review pilot
+
+Run `python scripts/data/prepare_annotation_batches.py` after exact mapping. The default pilot contains 50 ambiguous mapping labels, 50 unmatched labels, 25 exact-match audit labels, and 50 profile-skill evidence-level tasks. The reviewer packets omit profile IDs and synthetic generation labels. Separate local manifests retain those fields for error analysis. No generated task has a knowledge-level label. See the [annotation rubric](annotation-rubric.md) for labels, reviewer instructions, answer templates, and adjudication commands; [ADR 0012](../adr/0012-independent-evidence-level-annotation.md) records the rationale.

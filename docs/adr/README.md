@@ -16,3 +16,4 @@ Preserve accepted decisions. Changed decisions get a new record with reciprocal 
 - [Source-neutral central evidence profile](0009-central-evidence-profile.md)
 - [Exact taxonomy concept mapping before semantic matching](0010-exact-taxonomy-concept-mapping.md)
 - [Source-preserved occupation benchmarks](0011-source-preserved-occupation-benchmarks.md)
+- [Independent evidence-level annotation](0012-independent-evidence-level-annotation.md)
