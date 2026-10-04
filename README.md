@@ -2,6 +2,8 @@
 
 DIAR combines résumé PDFs, public GitHub information, and pasted LinkedIn text into an evidence-based profile, compares it with five career benchmarks, and explains suggested improvements.
 
+Results describe evidence detected in the supplied sources—not a person's overall expertise. GitHub output is limited to owned public repositories and reports factual portfolio recency rather than an `active`/`inactive` judgment.
+
 This local single-user academic prototype uses heuristic extraction, knowledge and rules, fuzzy classification, and bounded uniform-cost planning. The frontend is vanilla JavaScript.
 
 ## Quick start

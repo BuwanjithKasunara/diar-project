@@ -1,5 +1,6 @@
 {
   "programming_languages": {
+    "c": ["c programming", "c language"],
     "python": ["python", "python3", "py"],
     "java": ["java"],
     "javascript": ["javascript", "js", "ecmascript"],
@@ -33,7 +34,15 @@
     "transformers": ["transformers", "transformer model", "transformer models"],
     "llm": ["llm", "llms", "large language model", "large language models"],
     "generative ai": ["generative ai", "genai", "gen ai"],
-    "artificial intelligence": ["artificial intelligence", "ai"]
+    "artificial intelligence": ["artificial intelligence", "ai"],
+    "ai agents": ["ai agent", "ai agents", "agentic ai", "agentic system", "agentic systems"],
+    "retrieval augmented generation": ["retrieval augmented generation", "retrieval-augmented generation", "rag"],
+    "prompt engineering": ["prompt engineering", "prompt design"],
+    "model evaluation": ["model evaluation", "model evaluations", "llm evaluation", "llm evaluations", "evals"],
+    "jax": ["jax"],
+    "cuda": ["cuda"],
+    "langchain": ["langchain"],
+    "langgraph": ["langgraph"]
   },
   "data": {
     "pandas": ["pandas"],
@@ -84,7 +93,8 @@
     "redis": ["redis"],
     "oracle": ["oracle db", "oracle database"],
     "firebase": ["firebase"],
-    "dynamodb": ["dynamodb"]
+    "dynamodb": ["dynamodb"],
+    "vector databases": ["vector database", "vector databases", "vector store", "vector stores", "vector db", "vector dbs"]
   },
   "soft_business": {
     "leadership": ["leadership"],

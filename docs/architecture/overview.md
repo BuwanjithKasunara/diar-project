@@ -17,3 +17,4 @@ flowchart LR
 ```
 
 Ranking orders independent suggestions; search chooses combinations under assumed costs. Neither verifies competence. See [data model](data-model.md), [workflows](workflows.md), and [ADRs](../adr/README.md).
+

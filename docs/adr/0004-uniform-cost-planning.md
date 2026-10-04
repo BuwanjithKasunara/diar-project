@@ -24,3 +24,4 @@ Optimality applies only to completed search within the candidate model. Curated 
 - [Requirements](../project/scope-and-requirements.md)
 - [Architecture](../architecture/overview.md)
 - [Verification](../testing/results/development-verification.md)
+

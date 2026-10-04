@@ -40,3 +40,4 @@ if __name__ == "__main__":
         print(error)
     print(f"Documentation check: {len(errors)} error(s).")
     sys.exit(bool(errors))
+

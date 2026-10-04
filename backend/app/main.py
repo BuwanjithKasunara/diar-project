@@ -11,13 +11,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from . import database, config
-from .schemas import AnalyzeResponse, SavedReport, ReportHistoryItem
+from .schemas import AnalyzeResponseV3, AnalyzeRequest, SavedReport, ReportHistoryItem
 from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, planner
 
 BENCHMARKS = json.loads((Path(__file__).parent / "data/benchmarks.json").read_text())
 known_skills = {skill for category in extraction.SKILLS_DICT.values() for skill in category}
 for name, benchmark in BENCHMARKS.items():
-    unknown = (set(benchmark["required_skills"]) | set(benchmark["preferred_skills"])) - known_skills
+    capability_skills = {skill for c in benchmark.get("capabilities", [])
+                         for skill in [*c.get("skills", []), *c.get("related_skills", [])]}
+    unknown = (set(benchmark["required_skills"]) | set(benchmark["preferred_skills"]) |
+               capability_skills) - known_skills
     if unknown:
         raise ValueError(f"Unknown benchmark skills in {name}: {unknown}")
 VISIBILITY_LEVELS = alignment_engine.VISIBILITY_LEVELS
@@ -29,7 +32,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title="DIAR", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="DIAR", version="0.3.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=config.LOCAL_ORIGINS,
                    allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
 
@@ -61,36 +64,38 @@ def visibility_levels():
 @app.get("/api/config")
 def public_config():
     return {"max_pdf_bytes": config.MAX_PDF_BYTES, "max_pdf_pages": config.MAX_PDF_PAGES,
-            "max_text_chars": config.MAX_TEXT_CHARS, "activity_days": config.ACTIVITY_DAYS}
+            "max_text_chars": config.MAX_TEXT_CHARS, "activity_days": config.ACTIVITY_DAYS,
+            "max_github_readmes": config.MAX_GITHUB_READMES,
+            "max_github_readme_chars": config.MAX_GITHUB_README_CHARS}
 
 
-def process(benchmark_identity, visibility_level, github_username, linkedin_text, linkedin_visibility, file_bytes):
+def process(benchmark_identity, visibility_level, github_username, linkedin_text, linkedin_visibility, file_bytes,
+            as_of=None):
+    benchmark = BENCHMARKS[benchmark_identity]
     resume = extraction.extract_from_resume_text("")
     if file_bytes is not None:
         try:
             resume = extraction.extract_from_resume_text(extraction.extract_text_from_pdf(file_bytes))
         except ValueError as exc:
             resume["source_status"] = extraction.status("failed", str(exc))
-    github = extraction.extract_from_github(github_username) if github_username else {
+    github = extraction.extract_from_github(github_username, benchmark=benchmark, as_of=as_of) if github_username else {
         "source_status": extraction.status("not_supplied")}
     linkedin = extraction.extract_from_linkedin_text(linkedin_text, linkedin_visibility)
     profile = identity_construction.build_digital_identity_profile(resume, github, linkedin)
     if not profile["sources_provided_count"]:
         reasons = [s["reason"] for s in profile["source_statuses"].values() if s["reason"]]
         fail("no_usable_source", "No usable source. " + (" ".join(reasons) or "Supply PDF text, GitHub, or LinkedIn text."))
-    benchmark = BENCHMARKS[benchmark_identity]
     aligned = alignment_engine.run_alignment(profile, benchmark, benchmark_identity, visibility_level)
     recommendations = recommendation_engine.generate_recommendations(aligned["fired_rules"])
-    explanation = explainable_ai.build_explanation_summary(profile, benchmark_identity, aligned["gap_analysis"],
+    explanation = explainable_ai.build_explanation_summary(profile, benchmark_identity, aligned["assessment"],
                                                           aligned["visibility_assessment"], recommendations)
     explanation["rules_fired_count"] = len(aligned["fired_rules"])
     return {
-        "schema_version": 2, "benchmark_version": config.BENCHMARK_VERSION, "planner_version": config.PLANNER_VERSION,
+        "schema_version": 3, "benchmark_version": config.BENCHMARK_VERSION, "planner_version": config.PLANNER_VERSION,
         "benchmark_identity": benchmark_identity, "visibility_level": visibility_level, "github_username": github_username,
         "digital_identity_profile": profile, "source_statuses": profile["source_statuses"], "evidence": profile["evidence"],
-        "benchmark_comparison": {"benchmark_identity": benchmark_identity, "benchmark_description": benchmark["description"],
-                                  **{k: aligned["gap_analysis"][k] for k in ("matched_skills", "missing_required_skills", "missing_preferred_skills")}},
-        "gap_analysis": aligned["gap_analysis"], "visibility_assessment": aligned["visibility_assessment"],
+        "benchmark_comparison": aligned["benchmark_comparison"],
+        "assessment": aligned["assessment"], "visibility_assessment": aligned["visibility_assessment"],
         "recommendations": recommendations, "explanation_summary": explanation,
         "github_warning": github.get("error"),
         "suggested_plan": planner.generate_plan(aligned["objectives"], benchmark_identity, visibility_level, profile["skills"], recommendations),
@@ -98,7 +103,7 @@ def process(benchmark_identity, visibility_level, github_username, linkedin_text
     }
 
 
-@app.post("/api/analyze", response_model=AnalyzeResponse)
+@app.post("/api/analyze", response_model=AnalyzeResponseV3)
 async def analyze(benchmark_identity: str = Form(...), visibility_level: str = Form(...),
                   github_username: Optional[str] = Form(None), linkedin_text: str = Form(""),
                   linkedin_visibility: Literal["unverified", "public", "private"] = Form("unverified"),
@@ -127,7 +132,7 @@ async def analyze(benchmark_identity: str = Form(...), visibility_level: str = F
 
 
 @app.post("/api/reports", response_model=SavedReport, status_code=201)
-def save_report(report: AnalyzeResponse, db: Session = Depends(database.get_db)):
+def save_report(report: AnalyzeRequest, db: Session = Depends(database.get_db)):
     if report.benchmark_identity not in BENCHMARKS:
         fail("unknown_benchmark", "Unknown report benchmark.")
     row = database.Report(benchmark_identity=report.benchmark_identity, visibility_level=report.visibility_level,
@@ -144,9 +149,17 @@ def save_report(report: AnalyzeResponse, db: Session = Depends(database.get_db))
 
 @app.get("/api/reports", response_model=list[ReportHistoryItem])
 def list_reports(db: Session = Depends(database.get_db)):
-    return [{"id": r.id, "benchmark_identity": r.benchmark_identity, "visibility_level": r.visibility_level,
-             "github_username": r.github_username, "created_at": r.created_at.isoformat()}
-            for r in db.query(database.Report).order_by(database.Report.id.desc()).limit(50).all()]
+    rows = db.query(database.Report).order_by(database.Report.id.desc()).limit(50).all()
+    items = []
+    for row in rows:
+        try:
+            version = json.loads(row.report_json).get("schema_version")
+        except (json.JSONDecodeError, AttributeError):
+            version = None
+        items.append({"id": row.id, "benchmark_identity": row.benchmark_identity,
+                      "visibility_level": row.visibility_level, "github_username": row.github_username,
+                      "created_at": row.created_at.isoformat(), "schema_version": version})
+    return items
 
 
 @app.get("/api/reports/{report_id}")

@@ -14,3 +14,4 @@ These are supplied work assignments, not verified authorship.
 The improvement working tree was prepared with coding-assistant support. Code, tests, documents, and [verification records](../testing/results/development-verification.md) establish work products. Individual student authorship has not been verified here.
 
 Before submission, members must confirm actual tasks and references to commits, reviews, test records, or artifacts. Describe assistance accurately; never infer contribution from module ownership.
+

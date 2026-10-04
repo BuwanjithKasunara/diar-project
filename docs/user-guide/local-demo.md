@@ -11,3 +11,4 @@ Follow [setup](../development/setup.md).
 7. Use History to open/delete reports.
 
 For GitHub failures inspect warnings and retry or supply another source. Start the backend if offline. A failed later request preserves the previous result. Older reports may omit evidence/plans. Use synthetic data for demonstrations.
+

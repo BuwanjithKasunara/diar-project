@@ -82,3 +82,14 @@ def memberships(score, kind):
         'completeness': [('incomplete', -0.2, 0, 0.4), ('partial', 0.2, 0.5, 0.8), ('complete', 0.6, 1, 1.2)],
     }
     return {label: round(_triangular(score, a, b, c), 4) for label, a, b, c in groups[kind]}
+
+
+def evidence_memberships(score):
+    """Describe overlap with evidence-coverage concepts without choosing a winner."""
+    if score is None:
+        return {}
+    return {
+        "limited": round(_triangular(score, -0.2, 0.0, 0.5), 4),
+        "partial": round(_triangular(score, 0.15, 0.5, 0.85), 4),
+        "broad": round(_triangular(score, 0.5, 1.0, 1.2), 4),
+    }

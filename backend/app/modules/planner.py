@@ -14,15 +14,22 @@ def candidates(objectives, role, visibility, skills):
 
     def add(id, title, kind, covers, prerequisites=()):
         template = templates[kind]
+        explanation = ("Evidence-documentation action; it does not imply that an unobserved capability is absent."
+                       if kind in ("profile", "document") else
+                       "Hypothetical development action; relative effort is a catalogue assumption, not evidence of acquired competence.")
         actions.append({"id": id, "title": title, "cost": template["cost"],
                         "objectives": sorted(set(covers)), "prerequisites": sorted(prerequisites),
                         "roles": [role], "visibilities": template["visibilities"],
-                        "explanation": "Hypothetical development action; relative effort is a catalogue assumption, not evidence of acquired competence."})
+                        "explanation": explanation})
 
     for objective in sorted(goals):
         if objective.startswith("skill:"):
             skill = objective.split(":", 1)[1]
             add("learn:" + skill, "Develop and document " + skill, "learn", [objective])
+        elif objective.startswith("capability:"):
+            capability = objective.split(":", 1)[1]
+            add("learn-capability:" + capability, "Develop and document " + capability.replace("-", " "),
+                "learn", [objective])
     project = CATALOGUE["projects"][role]
     needed = [s for s in project["prerequisite_skills"] if s not in skills]
     for skill in needed:
@@ -95,3 +102,4 @@ def search(actions, objectives, role, visibility, max_actions=None, max_states=N
 def generate_plan(objectives, role, visibility, skills, recommendations):
     return search(candidates(objectives, role, visibility, set(skills)), objectives,
                   role, visibility, fallback=recommendations)
+

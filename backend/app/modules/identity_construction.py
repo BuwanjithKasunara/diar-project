@@ -5,7 +5,8 @@ def build_digital_identity_profile(resume, github, linkedin):
                 for name, data in sources.items()}
     flags = {name + "_provided": statuses[name]["status"] in ("analysed", "partial") for name in sources}
     evidence = sorted([e for d in sources.values() for e in d.get("evidence", [])],
-                      key=lambda e: (e["skill"], e["source"], e["excerpt"], e["method"], e["assertion"]))
+                      key=lambda e: (e["skill"], e["source"], e.get("origin", ""),
+                                     e.get("repository") or "", e["excerpt"], e["method"], e["assertion"]))
     years = [d["estimated_years_experience"] for d in (resume, linkedin)
              if d.get("estimated_years_experience") is not None]
     contacts = [{"source": name, "visibility": d.get("visibility", "unverified"),
@@ -17,11 +18,12 @@ def build_digital_identity_profile(resume, github, linkedin):
         "education": sorted({c for d in sources.values() for c in d.get("education", [])}),
         "estimated_years_experience": max(years) if years else None,
         "github": {k: github.get(k) for k in ("username", "repo_count", "recently_active_repo_count",
-                   "languages", "followers", "profile_complete", "top_repos", "bio")},
+                   "recently_pushed_owned_repo_count", "last_owned_repository_push_at", "languages", "followers",
+                   "profile_complete", "top_repos", "bio", "activity_window_days", "activity_proxy")},
         "linkedin": {"headline": linkedin.get("headline"), "profile_complete": linkedin.get("profile_complete", False)},
         "resume": {"provided": flags["resume_provided"], "projects_snippet": resume.get("projects_snippet", ""),
                    "experience_snippet": resume.get("experience_snippet", "")},
-        "project_evidence": [{"source": name, "excerpt": d["projects_snippet"][:1500]}
+        "project_evidence": [{"source": name, "excerpt": d["projects_snippet"][:10000]}
                              for name, d in sources.items() if d.get("projects_snippet")],
         "completeness_flags": flags,
         "content_completeness": {name: d.get("profile_complete", False) for name, d in sources.items()},

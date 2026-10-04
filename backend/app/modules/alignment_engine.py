@@ -1,19 +1,119 @@
-"""Evidence-aware rules. Unknown inputs are not treated as observed deficiencies."""
+"""Evidence-aware rules. Unobserved evidence is never treated as proven inability."""
 import re
 from . import fuzzy_logic
+
 VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
+SUPPORTED_SOURCES = ("resume", "github", "linkedin")
+
+
+def _flat_capabilities(benchmark):
+    capabilities = []
+    required = benchmark.get("required_skills", [])
+    preferred = benchmark.get("preferred_skills", [])
+    for importance, skills, total_weight in (("required", required, 0.7),
+                                              ("preferred", preferred, 0.3)):
+        if not skills:
+            continue
+        weight = total_weight / len(skills)
+        capabilities.extend({"id": skill.replace(" ", "-"), "label": skill,
+                             "weight": weight, "importance": importance, "skills": [skill]}
+                            for skill in skills)
+    if not capabilities:
+        return [{"id": "general", "label": "General evidence", "weight": 1.0,
+                 "importance": "preferred", "skills": []}]
+    normalizer = sum(c["weight"] for c in capabilities)
+    for capability in capabilities:
+        capability["weight"] /= normalizer
+    return capabilities
+
+
+def benchmark_capabilities(benchmark):
+    capabilities = benchmark.get("capabilities") or _flat_capabilities(benchmark)
+    total = sum(float(c["weight"]) for c in capabilities)
+    if not capabilities or abs(total - 1.0) > 1e-6:
+        raise ValueError("Benchmark capability weights must sum to 1.")
+    return capabilities
+
+
+def _capability_result(capability, evidence, usable_sources):
+    accepted = set(capability.get("skills", []))
+    related = set(capability.get("related_skills", []))
+    positive = [e for e in evidence if e.get("assertion") == "claimed" and e.get("skill") in accepted]
+    related_positive = [e for e in evidence if e.get("assertion") == "claimed" and e.get("skill") in related]
+    negative = [e for e in evidence if e.get("assertion") == "negated" and e.get("skill") in accepted]
+    direct_strength = max((float(e.get("strength", 0.8)) for e in positive), default=0.0)
+    related_strength = max((float(e.get("strength", 0.8)) * 0.5 for e in related_positive), default=0.0)
+    strength = round(max(direct_strength, related_strength), 3)
+    supporting = positive + related_positive
+    if not usable_sources:
+        state = "not_assessed"
+    elif strength >= 0.6:
+        state = "evidenced"
+    elif strength > 0:
+        state = "weakly_evidenced"
+    elif negative:
+        state = "explicit_gap"
+    else:
+        state = "not_observed"
+    return {
+        "id": capability["id"], "label": capability["label"],
+        "importance": capability.get("importance", "preferred"),
+        "weight": round(float(capability["weight"]), 4),
+        "accepted_skills": sorted(accepted),
+        "matched_skills": sorted({e["skill"] for e in supporting}),
+        "evidence_ids": sorted({e.get("id") for e in supporting if e.get("id")}),
+        "strength": strength, "state": state,
+    }
+
+
+def _source_scope(statuses):
+    groups = {"usable": [], "partial": [], "failed": [], "not_supplied": []}
+    for source in SUPPORTED_SOURCES:
+        value = statuses.get(source, {}).get("status", "not_supplied")
+        if value in ("analysed", "partial"):
+            groups["usable"].append(source)
+        if value == "partial":
+            groups["partial"].append(source)
+        elif value == "failed":
+            groups["failed"].append(source)
+        elif value == "not_supplied":
+            groups["not_supplied"].append(source)
+    return {"supported_total": len(SUPPORTED_SOURCES), "usable_count": len(groups["usable"]), **groups}
+
+
+def _github_recency(profile):
+    github = profile.get("github", {})
+    count = github.get("repo_count")
+    recent = github.get("recently_pushed_owned_repo_count")
+    return {
+        "availability": "available" if count is not None and recent is not None else "not_assessed",
+        "window_days": github.get("activity_window_days") or 180,
+        "owned_public_non_fork_repository_count": count,
+        "recently_pushed_owned_repository_count": recent,
+        "last_owned_repository_push_at": github.get("last_owned_repository_push_at"),
+        "limitation": ("Repository push timestamps describe the scanned owned public repositories, not the "
+                       "person's commits, contribution quality, organisation work, private work, or professional activity."),
+    }
 
 
 def run_alignment(profile, benchmark, benchmark_name, visibility_level):
     rules, clarification, goals = [], [], []
-    skills = set(profile["skills"])
-    required, preferred = set(benchmark["required_skills"]), set(benchmark["preferred_skills"])
-    missing = sorted(required - skills)
-    missing_preferred = sorted(preferred - skills)
-    matched = sorted(skills & (required | preferred))
-    score, label = fuzzy_logic.skill_match_degree(skills, required, preferred)
-    if profile["sources_provided_count"] == 0:
-        score, label = None, "insufficient evidence"
+    statuses = profile["source_statuses"]
+    source_scope = _source_scope(statuses)
+    results = [_capability_result(c, profile["evidence"], source_scope["usable"])
+               for c in benchmark_capabilities(benchmark)]
+    score = None if not source_scope["usable"] else round(sum(r["weight"] * r["strength"] for r in results), 3)
+    evidence_summary = {
+        "score": score,
+        "evidenced_count": sum(r["state"] == "evidenced" for r in results),
+        "weakly_evidenced_count": sum(r["state"] == "weakly_evidenced" for r in results),
+        "total_count": len(results),
+        "capability_results": results,
+        "memberships": fuzzy_logic.evidence_memberships(score),
+        "method": "Weighted maximum positive evidence per benchmark capability; duplicate mentions do not accumulate.",
+        "limitation": ("This is coverage of evidence found in supplied sources, not a probability or rating of "
+                       "competence, seniority, reputation, or employability."),
+    }
 
     def rule(id, action, title, priority, reason, objective=None):
         rules.append({"id": id, "action": action, "title": title, "priority": priority,
@@ -21,65 +121,56 @@ def run_alignment(profile, benchmark, benchmark_name, visibility_level):
         if objective:
             goals.append(objective)
 
-    if score is not None:
-        for skill in missing:
-            rule("R1-" + skill, "recommend_learning:" + skill, "Develop evidence of " + skill, "high",
-                 f"'{skill}' is required by {benchmark_name}, but no positive claim was detected in the analysed sources. This is not proof of absent ability.",
-                 "skill:" + skill)
-        for skill in missing_preferred:
-            rule("R2-" + skill, "recommend_learning:" + skill, "Consider " + skill, "medium",
-                 f"'{skill}' is preferred by {benchmark_name}; no positive claim was detected.")
+    explicit_gaps = [r for r in results if r["state"] == "explicit_gap"]
+    for capability in explicit_gaps:
+        rule("R1-explicit-" + capability["id"], "recommend_learning:" + capability["label"],
+             "Develop " + capability["label"], "high",
+             f"The supplied text explicitly negates experience in the {capability['label']} capability. "
+             "This recommendation follows that self-description, not an absent keyword.",
+             "capability:" + capability["id"])
+
+    unobserved = [r for r in results if r["state"] in ("not_observed", "weakly_evidenced")]
+    if unobserved:
+        labels = ", ".join(r["label"] for r in unobserved)
+        rule("R1-evidence", "recommend_profile", "Supply or document additional capability evidence", "medium",
+             f"The analysed sources did not provide strong evidence for: {labels}. This does not establish a skill gap.",
+             "evidence:profile")
+
     years = profile["estimated_years_experience"]
     if years is None and benchmark.get("min_experience_years", 0):
         clarification.append("Supply clearly dated employment history to assess experience.")
     elif years is not None and years < benchmark.get("min_experience_years", 0):
         rule("R3-experience", "recommend_gaining_experience", "Gain relevant experience", "medium",
-             f"Parsed employment periods suggest about {years} years; the benchmark expects {benchmark['min_experience_years']}.")
+             f"Parsed employment periods suggest about {years} years; the benchmark expects "
+             f"{benchmark['min_experience_years']}.")
 
     repo = profile["github"]
-    count, active = repo.get("repo_count"), repo.get("recently_active_repo_count")
-    activity_score, activity_label = (None, "insufficient evidence")
-    if count is not None and active is not None:
-        activity_score, activity_label = fuzzy_logic.activity_degree(active, count)
-    github_required = benchmark.get("github_required", True)
+    if benchmark.get("github_required", True) and statuses.get("github", {}).get("status") in ("failed", "partial"):
+        clarification.append("Some GitHub portfolio evidence was unavailable; retry or supply another source if needed.")
     project_text = " ".join(p["excerpt"] for p in profile["project_evidence"]).lower()
     project_matches = sorted({kw for kw in benchmark.get("expected_project_keywords", [])
                               if re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", project_text)})
-    showcase = {"Fully Public": "Publish a relevant portfolio project",
-                "Semi-Public": "Prepare a portfolio project for selective sharing",
-                "Privacy Focused": "Prepare a private portfolio project"}[visibility_level]
-    if github_required and count is None:
-        clarification.append("GitHub counts/activity are unavailable; supply or retry the source if you want them assessed.")
-    # A relevant project can be private. Repository counts do not override privacy choices.
-    project_needed = not project_matches and profile["sources_provided_count"] > 0
-    if project_needed:
-        rule("R4-project", "recommend_portfolio", showcase, "high",
-             f"No relevant project description was found for {benchmark_name}. {visibility_level} controls the suggested sharing method; keywords are only a relevance proxy.",
-             "evidence:project")
-    if github_required and count is not None and count < benchmark.get("min_github_repos", 0):
-        rule("R4-repo-count", "recommend_portfolio", showcase, "medium",
-             f"{count} non-fork repositories observed against the illustrative benchmark of {benchmark['min_github_repos']}. Private evidence is also acceptable.")
-    if count and activity_label == "inactive" and github_required:
-        rule("R5-activity", "recommend_activity", "Maintain relevant project evidence", "medium",
-             "Recent push timestamps indicate low activity. This proxy does not measure contribution quality.")
-    if github_required and count is not None and len(repo.get("languages") or []) < benchmark.get("min_github_languages", 0):
-        rule("R6-languages", "recommend_diversity", "Consider broader project experience", "low",
-             "Observed primary repository languages are below the illustrative benchmark; diversity alone does not establish competence.")
+    if not project_matches and source_scope["usable"]:
+        sharing = {"Fully Public": "publicly", "Semi-Public": "for selective sharing",
+                   "Privacy Focused": "privately"}[visibility_level]
+        rule("R4-project-evidence", "recommend_portfolio",
+             "Supply or document relevant project evidence", "medium",
+             f"No benchmark-relevant project description was observed. If such work exists, document it {sharing}; "
+             "the absence of a detected description is not proof that no project exists.", "evidence:project")
 
-    relevant_certs = [c for c in profile["certifications"] if any(
-        expected.lower() in c.lower() for expected in benchmark.get("certifications", []))]
-    if not relevant_certs:
-        rule("R7-certifications", "recommend_certification", "Consider a relevant certification", "medium",
-             "No listed benchmark certification was matched. Exact-name matching is conservative; equivalent credentials may need review.")
     if not profile["completeness_flags"]["linkedin_provided"]:
-        clarification.append("LinkedIn text was not analysed; it is optional and can be supplied for additional evidence.")
+        clarification.append("LinkedIn text was not analysed; it is optional and can supply additional evidence.")
+    elif not profile["content_completeness"]["linkedin"] and visibility_level == "Fully Public":
+        rule("R11-profile", "recommend_profile", "Add supporting sections to your professional profile", "medium",
+             "The supplied LinkedIn text has limited section coverage. Add evidence only if it reflects your work.",
+             "evidence:profile")
 
     public_contact = profile["public_contact_info_detected"]
     findings = []
     if public_contact and visibility_level != "Fully Public":
         rule("R10-privacy-contact", "recommend_privacy", "Reduce public contact exposure", "high",
-             f"Contact information was detected in a source identified as public, conflicting with the {visibility_level} preference.",
-             "privacy:contact")
+             f"Contact information was detected in a source identified as public, conflicting with the "
+             f"{visibility_level} preference.", "privacy:contact")
         findings.append("Contact details detected in a public source; consider selective contact sharing.")
     if any(c["visibility"] == "unverified" for c in profile["contact_findings"]):
         findings.append("Contact details occur in text with unverified visibility; public exposure is not established.")
@@ -88,16 +179,23 @@ def run_alignment(profile, benchmark, benchmark_name, visibility_level):
     findings.append({"Fully Public": "Public showcase actions are permitted.",
                      "Semi-Public": "Suggested actions favour selective sharing.",
                      "Privacy Focused": "Suggested actions support private portfolios."}[visibility_level])
-    completeness, completeness_label = fuzzy_logic.completeness_degree(profile["completeness_flags"])
-    return {"fired_rules": rules, "objectives": sorted(set(goals)), "clarification_requests": clarification,
-            "gap_analysis": {"matched_skills": matched, "missing_required_skills": missing,
-                             "missing_preferred_skills": missing_preferred,
-                             "skill_match_score": score, "skill_match_label": label,
-                             "github_activity_score": activity_score, "github_activity_label": activity_label,
-                             "profile_completeness_score": completeness, "profile_completeness_label": completeness_label,
-                             "memberships": {"skill_match": fuzzy_logic.memberships(score, "skill"),
-                                             "github_activity": fuzzy_logic.memberships(activity_score, "activity"),
-                                             "source_coverage": fuzzy_logic.memberships(completeness, "completeness")},
-                             "project_keyword_matches": project_matches, "relevant_certifications": relevant_certs},
-            "visibility_assessment": {"selected_level": visibility_level,
-                                      "public_contact_info_detected": public_contact, "findings": findings}}
+
+    comparison = {
+        "benchmark_identity": benchmark_name,
+        "benchmark_description": benchmark["description"],
+        "evidenced_capabilities": [r["label"] for r in results if r["state"] == "evidenced"],
+        "weakly_evidenced_capabilities": [r["label"] for r in results if r["state"] == "weakly_evidenced"],
+        "capabilities_not_observed": [r["label"] for r in results if r["state"] == "not_observed"],
+        "explicit_gaps": [r["label"] for r in explicit_gaps],
+        "project_keyword_matches": project_matches,
+    }
+    return {
+        "fired_rules": rules, "objectives": sorted(set(goals)),
+        "clarification_requests": list(dict.fromkeys(clarification)),
+        "assessment": {"benchmark_evidence": evidence_summary, "source_scope": source_scope,
+                       "github_portfolio_recency": _github_recency(profile)},
+        "benchmark_comparison": comparison,
+        "project_keyword_matches": project_matches,
+        "visibility_assessment": {"selected_level": visibility_level,
+                                  "public_contact_info_detected": public_contact, "findings": findings},
+    }

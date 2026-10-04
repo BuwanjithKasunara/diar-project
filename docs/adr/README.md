@@ -11,3 +11,5 @@ Preserve accepted decisions. Changed decisions get a new record with reciprocal 
 - [Uniform-cost action planning](0004-uniform-cost-planning.md)
 - [Explicit report persistence](0005-explicit-report-persistence.md)
 - [Privacy-aware role reasoning](0006-privacy-aware-role-reasoning.md)
+- [Capability evidence scoring and factual GitHub observations](0007-capability-evidence-scoring.md)
+

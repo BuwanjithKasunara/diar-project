@@ -1,8 +1,9 @@
 {
-  "version": "1",
+  "version": "2",
   "cost_units": "relative effort, not time or demonstrated competence",
   "templates": {
     "profile": {"cost": 1, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
+    "document": {"cost": 1, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
     "learn": {"cost": 2, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
     "project": {"cost": 3, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
     "privacy": {"cost": 1, "prerequisites": [], "visibilities": ["Semi-Public", "Privacy Focused"]}

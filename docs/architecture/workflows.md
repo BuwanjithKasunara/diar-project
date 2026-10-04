@@ -26,3 +26,4 @@ flowchart LR
  C -->|Open| D[GET /api/reports/id]
  C -->|Delete| E[DELETE /api/reports/id]
 ```
+

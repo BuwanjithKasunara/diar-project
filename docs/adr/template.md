@@ -22,3 +22,4 @@ Describe benefits, costs, limitations, and compatibility effects.
 ## Related documents
 
 Link affected requirements, architecture, and any superseded ADR. Replace this template content when creating a record.
+

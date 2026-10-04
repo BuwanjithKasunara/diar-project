@@ -1,5 +1,7 @@
 """Conservative evidence-preserving extraction; no neural model is claimed."""
 import difflib
+import base64
+import hashlib
 import json
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -20,18 +22,53 @@ PLANNED = re.compile(r"\b(plan|planning|want|wish|hope|intend|studying|learn)\b"
 UNCERTAIN = re.compile(r"\b(maybe|possibly|unsure|might)\b", re.I)
 CONTACT = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?<!\d)\+?\d[\d ()-]{8,}\d(?!\d)")
 
+TEXT_STRENGTH = 0.8
+README_STRENGTH = 1.0
+METADATA_STRENGTH = 0.6
+GITHUB_LANGUAGE_MAP = {
+    "c": "c", "c++": "c++", "c#": "c#", "cuda": "cuda", "go": "go", "java": "java",
+    "javascript": "javascript", "kotlin": "kotlin", "matlab": "matlab", "php": "php",
+    "python": "python", "r": "r", "ruby": "ruby", "rust": "rust", "scala": "scala",
+    "swift": "swift", "typescript": "typescript", "dockerfile": "docker",
+}
+ARTIFACT_TYPES = {
+    "resume_text": "resume", "linkedin_text": "linkedin", "profile_bio": "bio",
+    "repository_description": "description", "repository_topic": "topic",
+    "repository_readme": "readme", "repository_language": "language",
+    "repository_name": "name", "text": "text",
+}
+
 
 def status(value, reason=None):
     return {"status": value, "reason": reason}
 
 
-def extract_evidence(text, source):
+def _with_provenance(item, origin, repository, strength):
+    item = {
+        **item,
+        "origin": origin,
+        "artifact_type": ARTIFACT_TYPES.get(origin, "text"),
+        "repository": repository,
+        "repository_locator": repository,
+        "extraction_method": item["method"],
+        "strength": round(strength, 3),
+    }
+    raw = "|".join(str(item.get(k) or "") for k in
+                   ("skill", "source", "origin", "artifact_type", "repository_locator",
+                    "excerpt", "extraction_method", "assertion"))
+    item["id"] = "ev-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return item
+
+
+def extract_evidence(text, source, origin=None, repository=None, strength=TEXT_STRENGTH, allow_typos=True):
+    origin = origin or (source + "_text" if source in {"resume", "linkedin"} else "text")
     evidence = []
     for clause in re.split(r"\n|[;!?]|\.(?:\s|$)|\bbut\b", text, flags=re.I):
         clause = clause.strip()
         if not clause:
             continue
-        assertion = ("negated" if NEGATED.search(clause) else "planned" if PLANNED.search(clause)
+        context = re.sub(r"\b(machine|deep|reinforcement) learning\b", "technical subject", clause, flags=re.I)
+        assertion = ("negated" if NEGATED.search(context) else "planned" if PLANNED.search(context)
                      else "uncertain" if UNCERTAIN.search(clause) else "claimed")
         covered = set()
         for alias, skill, pattern in PATTERNS:
@@ -41,10 +78,12 @@ def extract_evidence(text, source):
                 if any(i in covered for i in range(match.start(), match.end())):
                     continue
                 covered.update(range(match.start(), match.end()))
-                evidence.append(dict(skill=skill, source=source, excerpt=clause[:300],
-                                     method="exact" if alias == skill else "alias", assertion=assertion))
+                evidence.append(_with_provenance(
+                    dict(skill=skill, source=source, excerpt=clause[:300],
+                         method="exact" if alias == skill else "alias", assertion=assertion),
+                    origin, repository, strength))
         # Typo matching is limited to comma-separated explicit skill lists.
-        if re.match(r"^(?:technical )?(?:skills|technologies|languages)\s*:", clause, re.I) and assertion == "claimed":
+        if allow_typos and re.match(r"^(?:technical )?(?:skills|technologies|languages)\s*:", clause, re.I) and assertion == "claimed":
             for item in re.split(r",|/|\band\b", clause.split(":", 1)[1], flags=re.I):
                 item = item.strip().lower()
                 if not re.fullmatch(r"[a-z][a-z+#-]{3,}", item) or item in ALIASES:
@@ -52,9 +91,11 @@ def extract_evidence(text, source):
                 candidates = [a for a in ALIASES if " " not in a and a not in AMBIGUOUS and a[0] == item[0]]
                 matches = difflib.get_close_matches(item, candidates, n=1, cutoff=0.82)
                 if matches:
-                    evidence.append(dict(skill=ALIASES[matches[0]], source=source, excerpt=clause[:300],
-                                         method="typo", assertion="claimed"))
-    unique = {(e["skill"], e["source"], e["excerpt"], e["method"], e["assertion"]): e for e in evidence}
+                    evidence.append(_with_provenance(
+                        dict(skill=ALIASES[matches[0]], source=source, excerpt=clause[:300],
+                             method="typo", assertion="claimed"), origin, repository, min(strength, 0.5)))
+    unique = {(e["skill"], e["source"], e["origin"], e.get("repository"), e["excerpt"],
+               e["method"], e["assertion"]): e for e in evidence}
     return [unique[k] for k in sorted(unique)]
 
 
@@ -109,6 +150,11 @@ def extract_text(text, source, visibility="private"):
     evidence = extract_evidence(text, source)
     parts = sections(text)
     present = bool(text.strip())
+    project_text = parts.get("projects", "") or parts.get("portfolio", "")
+    if not project_text:
+        inline_projects = re.search(r"\b(?:projects?|portfolio)\s*:\s*(.+)", text, re.I | re.S)
+        if inline_projects:
+            project_text = inline_projects.group(1).strip()
     return {
         "source": source, "source_status": status("analysed" if present else "not_supplied"),
         "skills": sorted({e["skill"] for e in evidence if e["assertion"] == "claimed"}),
@@ -119,7 +165,7 @@ def extract_text(text, source, visibility="private"):
         "education": sorted({line.strip() for line in text.splitlines()
                               if re.search(r"\b(bachelor|master|degree|university|diploma|phd)\b", line, re.I)}),
         "experience_snippet": parts.get("experience", "")[:1500],
-        "projects_snippet": (parts.get("projects", "") or parts.get("portfolio", ""))[:1500],
+        "projects_snippet": project_text[:1500],
         "estimated_years_experience": experience_years(text),
         "raw_text_length": len(text), "headline": text.strip().split("\n")[0][:200],
         "profile_complete": present and len(parts) > 2,
@@ -154,16 +200,98 @@ def extract_text_from_pdf(file_bytes):
     return text
 
 
-def extract_from_github(username, github_token=None):
+def _parse_github_time(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _as_of_datetime(as_of):
+    if as_of is None:
+        return datetime.now(timezone.utc)
+    if isinstance(as_of, datetime):
+        return as_of if as_of.tzinfo else as_of.replace(tzinfo=timezone.utc)
+    if isinstance(as_of, date):
+        return datetime(as_of.year, as_of.month, as_of.day, tzinfo=timezone.utc)
+    raise TypeError("as_of must be a date or datetime.")
+
+
+def _repo_name(repo):
+    return str(repo.get("full_name") or repo.get("name") or "")
+
+
+def _benchmark_skills(benchmark):
+    if not benchmark:
+        return set()
+    capabilities = benchmark.get("capabilities") or []
+    if capabilities:
+        return {skill for capability in capabilities for skill in capability.get("skills", [])}
+    return set(benchmark.get("required_skills", [])) | set(benchmark.get("preferred_skills", []))
+
+
+def _repo_relevance(repo, benchmark):
+    text = "\n".join([repo.get("name") or "", repo.get("description") or "",
+                      " ".join(repo.get("topics") or [])])
+    skills = set(_find_skills("Skills: " + text, fuzzy=False))
+    accepted = _benchmark_skills(benchmark)
+    keywords = benchmark.get("expected_project_keywords", []) if benchmark else []
+    keyword_hits = sum(bool(re.search(r"(?<!\w)" + re.escape(k) + r"(?!\w)", text, re.I)) for k in keywords)
+    return len(skills & accepted) + keyword_hits
+
+
+def _representative_repos(repos, benchmark, limit):
+    candidates = [r for r in repos if not r.get("archived")]
+    def pushed(repo):
+        value = _parse_github_time(repo.get("pushed_at"))
+        return value.timestamp() if value else 0
+    relevance = sorted(candidates, key=lambda r: (-_repo_relevance(r, benchmark),
+                       -int(r.get("stargazers_count") or 0), -pushed(r), _repo_name(r).lower()))
+    chosen = relevance[:min(3, limit)]
+    seen = {_repo_name(r).lower() for r in chosen}
+    recent = sorted(candidates, key=lambda r: (-pushed(r), _repo_name(r).lower()))
+    for repo in recent:
+        if len(chosen) >= limit:
+            break
+        if _repo_name(repo).lower() not in seen:
+            chosen.append(repo)
+            seen.add(_repo_name(repo).lower())
+    return chosen
+
+
+def _readme_text(response):
+    value = getattr(response, "text", None)
+    if isinstance(value, str) and value:
+        return value
+    data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get("content"), str):
+        raise ValueError("Malformed GitHub README response.")
+    if data.get("encoding") == "base64":
+        return base64.b64decode(data["content"], validate=False).decode("utf-8", errors="replace")
+    return data["content"]
+
+
+def _metadata_evidence(skill, excerpt, repository):
+    return _with_provenance({"skill": skill, "source": "github", "excerpt": excerpt[:300],
+                             "method": "metadata", "assertion": "claimed"},
+                            "repository_language", repository, METADATA_STRENGTH)
+
+
+def extract_from_github(username, github_token=None, benchmark=None, as_of=None):
     result = {"source": "github", "username": username, "skills": [], "evidence": [],
               "languages": [], "repo_count": None, "recently_active_repo_count": None,
+              "recently_pushed_owned_repo_count": None, "last_owned_repository_push_at": None,
               "profile_complete": False, "top_repos": [], "visibility": "public"}
-    headers = {"Accept": "application/vnd.github+json"}
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     token = github_token or config.GITHUB_TOKEN
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    repos, profile = [], None
-    reason = None
+    repos, profile, readmes = [], None, {}
+    reasons = []
+    repo_inventory_complete = True
     try:
         with requests.Session() as session:
             response = session.get(f"https://api.github.com/users/{username}", headers=headers, timeout=10)
@@ -175,45 +303,106 @@ def extract_from_github(username, github_token=None):
                 raise ValueError("Malformed GitHub profile response.")
             for page in range(1, (config.MAX_REPOS + 99)//100 + 1):
                 response = session.get(f"https://api.github.com/users/{username}/repos",
-                                       params={"per_page": 100, "sort": "pushed", "page": page}, headers=headers, timeout=10)
+                                       params={"per_page": 100, "sort": "pushed", "type": "owner", "page": page},
+                                       headers=headers, timeout=10)
                 if response.status_code != 200:
                     raise ValueError(f"GitHub repositories request returned HTTP {response.status_code}.")
                 batch = response.json()
-                if not isinstance(batch, list) or any(not isinstance(r, dict) for r in batch):
+                if not isinstance(batch, list) or any(not isinstance(r, dict) or
+                    any(r.get(k) is not None and not isinstance(r[k], str)
+                        for k in ("name", "full_name", "description", "language", "pushed_at")) or
+                    (r.get("topics") is not None and not isinstance(r["topics"], list)) for r in batch):
                     raise ValueError("Malformed GitHub repositories response.")
                 remaining = config.MAX_REPOS - len(repos)
                 repos.extend(batch[:remaining])
-                if len(batch) > remaining or (len(repos) >= config.MAX_REPOS and (response.links.get("next") or len(batch) == 100)):
-                    reason = "Repository cap reached; counts and activity are not assessed."
+                links = getattr(response, "links", {}) or {}
+                if len(batch) > remaining or (len(repos) >= config.MAX_REPOS and
+                                               (links.get("next") or len(batch) == 100)):
+                    repo_inventory_complete = False
+                    reasons.append("Repository cap reached; repository counts and recency are not assessed.")
                     break
                 if len(batch) < 100:
                     break
+            own = [r for r in repos if not r.get("fork")]
+            selected = (_representative_repos(own, benchmark, config.MAX_GITHUB_READMES)
+                        if benchmark is not None else [])
+            for repo in selected:
+                name = repo.get("name")
+                if not name:
+                    continue
+                try:
+                    readme_headers = {**headers, "Accept": "application/vnd.github.raw+json"}
+                    response = session.get(f"https://api.github.com/repos/{username}/{name}/readme",
+                                           headers=readme_headers, timeout=10)
+                    if response.status_code == 404:
+                        continue
+                    if response.status_code != 200:
+                        reasons.append(f"README for {_repo_name(repo)} returned HTTP {response.status_code}.")
+                        continue
+                    readmes[_repo_name(repo)] = _readme_text(response)[:config.MAX_GITHUB_README_CHARS]
+                except (requests.RequestException, ValueError, TypeError):
+                    reasons.append(f"README for {_repo_name(repo)} could not be analysed.")
     except (requests.RequestException, ValueError, TypeError) as exc:
-        reason = str(exc) if isinstance(exc, ValueError) else "GitHub connection failed; retry later."
+        if profile is not None:
+            repo_inventory_complete = False
+        reasons.append(str(exc) if isinstance(exc, ValueError) else "GitHub connection failed; retry later.")
+    reason = " ".join(dict.fromkeys(reasons)) or None
     if profile is None:
         result.update(source_status=status("failed", reason), error=reason)
         return result
+
     own = [r for r in repos if not r.get("fork")]
-    text = "\n".join([profile.get("bio") or "", *[(r.get("description") or "") for r in own]])
-    langs = sorted({r["language"].lower() for r in own if isinstance(r.get("language"), str)})
-    evidence = extract_evidence(text, "github")
-    evidence.extend(dict(skill=ALIASES.get(l, l), source="github", excerpt=f"Repository primary language: {l}",
-                         method="metadata", assertion="claimed") for l in langs)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=config.ACTIVITY_DAYS)
-    active = 0
+    evidence = extract_evidence(profile.get("bio") or "", "github", "profile_bio", None, TEXT_STRENGTH,
+                                allow_typos=False)
+    project_text = []
     for repo in own:
-        try:
-            pushed = datetime.fromisoformat(repo["pushed_at"].replace("Z", "+00:00"))
-            active += pushed >= cutoff
-        except (KeyError, TypeError, ValueError):
-            reason = reason or "Some repository push dates unavailable; activity is not assessed."
+        repository = _repo_name(repo)
+        name = repo.get("name") or ""
+        description = repo.get("description") or ""
+        topics = [t for t in (repo.get("topics") or []) if isinstance(t, str)]
+        evidence.extend(extract_evidence("Skills: " + name.replace("-", " ").replace("_", " "), "github",
+                                         "repository_name", repository, METADATA_STRENGTH, allow_typos=False))
+        evidence.extend(extract_evidence(description, "github", "repository_description", repository,
+                                         TEXT_STRENGTH, allow_typos=False))
+        evidence.extend(extract_evidence("Skills: " + ", ".join(topics), "github", "repository_topic",
+                                         repository, METADATA_STRENGTH, allow_typos=False))
+        if description:
+            project_text.append(description)
+        language = repo.get("language")
+        canonical = GITHUB_LANGUAGE_MAP.get(language.lower()) if isinstance(language, str) else None
+        if canonical:
+            evidence.append(_metadata_evidence(canonical, f"Repository primary language: {language}", repository))
+    for repository, readme in readmes.items():
+        evidence.extend(extract_evidence(readme, "github", "repository_readme", repository,
+                                         README_STRENGTH, allow_typos=False))
+        project_text.append(readme[:2000])
+
+    unique = {(e["skill"], e["source"], e["origin"], e.get("repository"), e["excerpt"],
+               e["method"], e["assertion"]): e for e in evidence}
+    evidence = [unique[k] for k in sorted(unique)]
+    langs = sorted({r["language"].lower() for r in own if isinstance(r.get("language"), str)})
+    cutoff = _as_of_datetime(as_of) - timedelta(days=config.ACTIVITY_DAYS)
+    pushed_values = [_parse_github_time(r.get("pushed_at")) for r in own]
+    invalid_dates = any(r.get("pushed_at") is not None and parsed is None for r, parsed in zip(own, pushed_values))
+    if invalid_dates:
+        repo_inventory_complete = False
+        reason = " ".join(filter(None, [reason, "Some repository push dates were unavailable; recency is not assessed."]))
+    valid_pushes = [value for value in pushed_values if value is not None]
+    active = sum(value >= cutoff for value in valid_pushes)
+    last_push = max(valid_pushes).isoformat() if valid_pushes else None
+    counts_available = repo_inventory_complete and not invalid_dates
     result.update(source_status=status("partial" if reason else "analysed", reason), error=reason,
+                  activity_window_days=config.ACTIVITY_DAYS,
+                  activity_proxy="owned public non-fork repository push timestamps",
                   evidence=evidence, skills=sorted({e["skill"] for e in evidence if e["assertion"] == "claimed"}),
-                  languages=langs, repo_count=len(own) if not reason else None,
-                  recently_active_repo_count=active if not reason else None,
+                  languages=langs, repo_count=len(own) if counts_available else None,
+                  recently_active_repo_count=active if counts_available else None,
+                  recently_pushed_owned_repo_count=active if counts_available else None,
+                  last_owned_repository_push_at=last_push if counts_available else None,
                   bio=profile.get("bio"), followers=profile.get("followers", 0),
                   profile_complete=bool(profile.get("bio") and profile.get("name")),
-                  contact_info_detected=bool(profile.get("email") or CONTACT.search(text)),
-                  projects_snippet="\n".join(r.get("description") or "" for r in own),
-                  top_repos=[{k: r.get(k) for k in ("name", "description", "language")} for r in own[:5]])
+                  contact_info_detected=bool(profile.get("email") or CONTACT.search(profile.get("bio") or "")),
+                  projects_snippet="\n".join(project_text)[:10000],
+                  top_repos=[{k: r.get(k) for k in ("name", "full_name", "description", "language", "topics")}
+                             for r in _representative_repos(own, benchmark, config.MAX_GITHUB_READMES)])
     return result

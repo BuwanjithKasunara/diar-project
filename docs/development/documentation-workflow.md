@@ -9,3 +9,4 @@
 Documentation belongs in the same change/review unit, not postponed until submission. Never present planned or untested behaviour as complete.
 
 Run `python scripts/check_docs.py` for internal Markdown links and duplicate ADR numbers. It does not verify remote links or prose accuracy. Review API examples against generated OpenAPI. Code/configuration owns parameters; docs explain and reference them. Use synthetic/redacted examples and follow the [ADR policy](../adr/README.md).
+

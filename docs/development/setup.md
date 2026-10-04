@@ -31,3 +31,4 @@ CORS is not authentication. This release is for local single-user operation, not
 ## Checks
 
 From project root run `python -m pytest backend/tests -q` and `python scripts/check_docs.py` using the virtual environment interpreter. Tests must use temporary databases, never saved user reports. Installing dependencies requires package-network access.
+

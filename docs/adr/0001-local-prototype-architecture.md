@@ -24,3 +24,4 @@ Small setup and no frontend build requirement; no account isolation or shared-ho
 - [Requirements](../project/scope-and-requirements.md)
 - [Architecture](../architecture/overview.md)
 - [Verification](../testing/results/development-verification.md)
+

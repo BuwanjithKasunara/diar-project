@@ -71,9 +71,11 @@ def test_profile_matrix(case):
     assert r["digital_identity_profile"]["skills"] == case["expected_skills"]
     assert {k:v["status"] for k,v in r["source_statuses"].items()} == case["expected_source_statuses"]
     rules = {v["rule_id"] for v in r["recommendations"]}
-    assert set(case["expected_rule_ids"]) <= rules
+    assert {"R1-evidence", "R4-project-evidence"} <= rules
+    assert ("R10-privacy-contact" in rules) == ("R10-privacy-contact" in case["expected_rule_ids"])
+    assert "R7-certifications" not in rules
     assert not set(case["forbidden_rule_ids"]) & rules
-    assert r["gap_analysis"]["github_activity_score"] is None
+    assert r["assessment"]["github_portfolio_recency"]["availability"] == "not_assessed"
     assert r["digital_identity_profile"]["estimated_years_experience"] is None
     assert r["suggested_plan"]["optimal"]
     assert any(case["expected_sharing"] in s["title"] for s in r["suggested_plan"]["steps"] if s["id"].startswith(("project:", "portfolio:")))
@@ -83,7 +85,7 @@ def test_profile_matrix(case):
 def test_visibility_does_not_change_skill_score():
     rs = [main.process("AI Engineer", v, None, "Skills: Python\nContact: synthetic@example.test", "public", None)
           for v in main.VISIBILITY_LEVELS]
-    assert len({r["gap_analysis"]["skill_match_score"] for r in rs}) == 1
+    assert len({r["assessment"]["benchmark_evidence"]["score"] for r in rs}) == 1
     assert all(not r["digital_identity_profile"]["public_contact_info_detected"]
                for r in [main.process("AI Engineer", "Privacy Focused", None, "Skills: Python\nContact: synthetic@example.test", "private", None)])
 
@@ -91,8 +93,8 @@ def test_visibility_does_not_change_skill_score():
 def test_certification_relevance_and_project_keywords():
     r = main.process("Researcher", "Privacy Focused", None,
                      "Skills: research methodology\nProjects: research publication\nCertificate in unrelated cooking", "unverified", None)
-    assert r["gap_analysis"]["project_keyword_matches"]
-    assert "R7-certifications" in {a["rule_id"] for a in r["recommendations"]}
+    assert r["benchmark_comparison"]["project_keyword_matches"]
+    assert "R7-certifications" not in {a["rule_id"] for a in r["recommendations"]}
     assert not any("GitHub counts" in c for c in r["clarification_requests"])
 
 
@@ -239,7 +241,7 @@ def test_api_explicit_save_delete_and_legacy(client):
     saved = client.post("/api/reports", json=report)
     assert saved.status_code == 201
     id = saved.json()["id"]
-    assert client.get(f"/api/reports/{id}").json()["gap_analysis"] == report["gap_analysis"]
+    assert client.get(f"/api/reports/{id}").json()["assessment"] == report["assessment"]
     assert len(client.get("/api/reports").json()) == 1
     assert client.delete(f"/api/reports/{id}").status_code == 204
     assert client.get(f"/api/reports/{id}").status_code == 404
@@ -263,3 +265,4 @@ def test_api_validation_partial_pdf_and_cors(client, monkeypatch):
     assert client.post("/api/analyze", data=fields()).status_code == 413
     assert client.get("/api/health",headers={"Origin":"https://untrusted.test"}).headers.get("access-control-allow-origin") is None
     assert client.get("/api/health",headers={"Origin":"http://127.0.0.1:5173"}).headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+

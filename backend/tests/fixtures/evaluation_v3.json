@@ -1,0 +1,175 @@
+{
+  "dataset_version": "3.0",
+  "provenance": "Authored, anonymized synthetic regression data. It is not a held-out or population-representative benchmark.",
+  "acceptance_gates": {
+    "macro_precision": 0.9,
+    "macro_recall": 0.85,
+    "strong_evidence_non_limited_rate": 0.9,
+    "adversarial_non_broad_rate": 0.95,
+    "insufficient_not_assessed_rate": 1.0,
+    "absence_only_gap_wording_rate": 0.0
+  },
+  "extraction_cases": [
+    {
+      "id": "expert-model-stack",
+      "text": "Built neural networks in PyTorch and CUDA, then evaluated an LLM retrieval system.",
+      "expected_skills": ["cuda", "llm", "model evaluation", "neural network", "pytorch", "retrieval augmented generation"]
+    },
+    {
+      "id": "tensorflow-alternative",
+      "text": "Implemented deep learning models with TensorFlow and deployed a FastAPI service in Docker.",
+      "expected_skills": ["deep learning", "docker", "fastapi", "tensorflow"]
+    },
+    {
+      "id": "agents-and-langgraph",
+      "text": "Developed AI agents using LangGraph and LangChain with a vector database.",
+      "expected_skills": ["ai agents", "langchain", "langgraph", "vector databases"]
+    },
+    {
+      "id": "data-delivery",
+      "text": "Built ETL pipelines with SQL, pandas and NumPy; maintained CI/CD on AWS.",
+      "expected_skills": ["aws", "ci/cd", "etl", "numpy", "pandas", "sql"]
+    },
+    {
+      "id": "q-learning-claim",
+      "text": "Implemented Q-learning for a reinforcement learning research project.",
+      "expected_skills": ["reinforcement learning"]
+    },
+    {
+      "id": "planned-and-negated",
+      "text": "I plan to learn Docker and have no experience with Kubernetes. Skills: Python.",
+      "expected_skills": ["python"]
+    },
+    {
+      "id": "ambiguous-natural-language",
+      "text": "I go to meet clients and rest after work; my CV is attached.",
+      "expected_skills": []
+    },
+    {
+      "id": "explicit-skill-context",
+      "text": "Programming languages: Go, R, TypeScript. Technologies: REST API.",
+      "expected_skills": ["go", "r", "rest api", "typescript"]
+    },
+    {
+      "id": "typo-list",
+      "text": "Skills: Pythom, Dockr",
+      "expected_skills": ["docker", "python"]
+    },
+    {
+      "id": "ordinary-prose-no-skills",
+      "text": "Prepared weekly notes, reviewed schedules, and discussed customer feedback.",
+      "expected_skills": []
+    }
+  ],
+  "assessment_cases": [
+    {
+      "id": "strong-pytorch",
+      "kind": "strong_evidence",
+      "role": "AI Engineer",
+      "text": "Skills: Python, neural networks, LLMs, PyTorch, Docker, SQL. Projects: Built and evaluated a retrieval-augmented AI agent API.",
+      "minimum_evidenced_capabilities": 5
+    },
+    {
+      "id": "strong-tensorflow",
+      "kind": "strong_evidence",
+      "role": "AI Engineer",
+      "text": "Skills: Python, machine learning, generative AI, TensorFlow, FastAPI, pandas. Projects: Deployed and evaluated generative models.",
+      "minimum_evidenced_capabilities": 5
+    },
+    {
+      "id": "strong-cv-jax",
+      "kind": "strong_evidence",
+      "role": "AI Engineer",
+      "text": "Skills: C++, deep learning, computer vision, JAX, Kubernetes, NumPy. Projects: Trained image models and documented evaluation.",
+      "minimum_evidenced_capabilities": 5
+    },
+    {
+      "id": "strong-agents-langgraph",
+      "kind": "strong_evidence",
+      "role": "AI Engineer",
+      "text": "Skills: TypeScript, statistics, AI agents, LangGraph, cloud platforms, vector databases. Projects: Built an agent evaluation harness.",
+      "minimum_evidenced_capabilities": 5
+    },
+    {
+      "id": "strong-nlp-transformers",
+      "kind": "strong_evidence",
+      "role": "AI Engineer",
+      "text": "Skills: Python, machine learning, NLP, transformers, MLOps, ETL. Projects: Trained and evaluated text classifiers.",
+      "minimum_evidenced_capabilities": 5
+    },
+    {
+      "id": "keyword-repeat-python",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Skills: Python, Python, Python, Python, Python.",
+      "maximum_evidenced_capabilities": 1
+    },
+    {
+      "id": "keyword-repeat-llm",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Skills: LLM, LLM, LLM, LLM, LLM.",
+      "maximum_evidenced_capabilities": 1
+    },
+    {
+      "id": "keyword-repeat-docker",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Skills: Docker, Docker, Docker, Docker.",
+      "maximum_evidenced_capabilities": 1
+    },
+    {
+      "id": "keyword-repeat-sql",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Skills: SQL, SQL, SQL, SQL.",
+      "maximum_evidenced_capabilities": 1
+    },
+    {
+      "id": "trivial-fresh-notes",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Projects: A newly created repository containing meeting notes.",
+      "maximum_evidenced_capabilities": 0
+    },
+    {
+      "id": "archive-heavy-description",
+      "kind": "adversarial",
+      "role": "AI Engineer",
+      "text": "Projects: Archived examples. Skills: JavaScript.",
+      "maximum_evidenced_capabilities": 1
+    },
+    {
+      "id": "absence-only-python",
+      "kind": "absence_only",
+      "role": "AI Engineer",
+      "text": "Skills: Python.",
+      "maximum_confirmed_gap_recommendations": 0
+    },
+    {
+      "id": "absence-only-llm",
+      "kind": "absence_only",
+      "role": "AI Engineer",
+      "text": "Projects: Built an LLM experiment.",
+      "maximum_confirmed_gap_recommendations": 0
+    },
+    {
+      "id": "all-sources-unsupplied",
+      "kind": "insufficient",
+      "role": "AI Engineer"
+    },
+    {
+      "id": "all-sources-failed",
+      "kind": "insufficient",
+      "role": "AI Engineer",
+      "failed": true
+    },
+    {
+      "id": "explicit-gap-docker",
+      "kind": "explicit_gap",
+      "role": "AI Engineer",
+      "text": "Skills: Python, machine learning. I have no experience with Docker.",
+      "expected_explicit_gap": "delivery"
+    }
+  ]
+}

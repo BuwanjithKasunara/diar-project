@@ -13,3 +13,4 @@ The improvement phase retains AI Engineer, Software Engineer, Data Scientist, Re
 See [handover](handover.md) and [verification results](../testing/results/development-verification.md) for implementation evidence.
 
 Neural training, React migration, accounts, hosting, OCR, and automated LinkedIn collection are deferred. Broader user evaluation and final report/slides/video follow this phase.
+
