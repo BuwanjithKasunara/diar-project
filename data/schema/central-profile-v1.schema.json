@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diar.local/schemas/central-profile-v1.schema.json",
+  "title": "DIAR central evidence profile v1",
+  "description": "Source-neutral professional evidence collected before semantic extraction or benchmark comparison.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "source_records", "profile_evidence", "design_labels"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "profile_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "source_records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/sourceRecord"}
+    },
+    "profile_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claims", "evidence_units"],
+      "properties": {
+        "claims": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/claim"}
+        },
+        "evidence_units": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceUnit"}
+        }
+      }
+    },
+    "design_labels": {"$ref": "#/$defs/designLabels"}
+  },
+  "$defs": {
+    "sourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_record_id", "source_type", "status", "synthetic", "locator"],
+      "properties": {
+        "source_record_id": {"type": "string", "pattern": "^src-[0-9a-f]{16}$"},
+        "source_type": {
+          "enum": ["synthetic_profile", "resume", "linkedin", "github"]
+        },
+        "status": {"enum": ["analysed", "partial", "failed", "not_supplied"]},
+        "synthetic": {"type": "boolean"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "evidenceUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "source_record_id",
+        "artifact_type",
+        "text",
+        "locator",
+        "extraction_method"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^ev-[0-9a-f]{16}$"},
+        "source_record_id": {"type": "string", "pattern": "^src-[0-9a-f]{16}$"},
+        "artifact_type": {
+          "enum": [
+            "stated_skill",
+            "profile_summary",
+            "experience",
+            "education",
+            "project",
+            "certification",
+            "award",
+            "publication"
+          ]
+        },
+        "text": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+        "extraction_method": {"const": "structured_field"}
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"mapping_status": {"const": "exact"}}},
+          "then": {
+            "properties": {
+              "canonical_concept_id": {"type": "string", "minLength": 1},
+              "mapping_candidates": {"minItems": 1, "maxItems": 1}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"mapping_status": {"const": "ambiguous"}}},
+          "then": {
+            "properties": {
+              "canonical_concept_id": {"type": "null"},
+              "mapping_candidates": {"minItems": 2}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"mapping_status": {"const": "unmapped"}}},
+          "then": {
+            "properties": {
+              "canonical_concept_id": {"type": "null"},
+              "mapping_candidates": {"maxItems": 0}
+            }
+          }
+        }
+      ],
+      "required": [
+        "claim_id",
+        "category",
+        "concept_text",
+        "normalized_text",
+        "canonical_concept_id",
+        "mapping_status",
+        "mapping_candidates",
+        "assertion",
+        "evidence_ids"
+      ],
+      "properties": {
+        "claim_id": {"type": "string", "pattern": "^clm-[0-9a-f]{16}$"},
+        "category": {"enum": ["skill", "knowledge", "tool", "credential"]},
+        "concept_text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "normalized_text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "canonical_concept_id": {
+          "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]
+        },
+        "mapping_status": {"enum": ["unmapped", "exact", "ambiguous"]},
+        "mapping_candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "assertion": {"enum": ["claimed", "planned", "negated", "uncertain"]},
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^ev-[0-9a-f]{16}$"}
+        }
+      }
+    },
+    "designLabels": {
+      "description": "Source-generation metadata for sampling and error analysis only; never model features.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "excluded_from_model_input",
+        "cohort",
+        "job_family",
+        "seniority",
+        "seed_role",
+        "sample_group"
+      ],
+      "properties": {
+        "excluded_from_model_input": {"const": true},
+        "cohort": {"type": "string", "minLength": 1},
+        "job_family": {"type": "string", "minLength": 1},
+        "seniority": {"type": "string", "minLength": 1},
+        "seed_role": {"type": "string", "minLength": 1},
+        "sample_group": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

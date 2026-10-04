@@ -18,6 +18,16 @@ The checker validates local target existence, not heading fragments, remote URLs
 
 The version 3 tests cover capability-group alternatives and isolation, evidence strengths and provenance, Q-learning assertion handling, deterministic repository and README selection, partial and rate-limited GitHub scans, language whitelisting and Dockerfile mapping, raw recency observations, absence-only recommendation safety, legacy compatibility, and version 3 persistence. Existing extraction, planner, PDF, API validation, privacy, and explicit report-management regressions remain covered.
 
+## Dataset-design checks
+
+- `.venv-dev/Scripts/python.exe scripts/data/audit_raw_data.py --output data/reports/raw-dataset-profile.json`: passed across 70 raw files; the 1,000-row filtered sample satisfied its membership, balance, JSON, and privacy-field contract against the 248,522-row source.
+- `.venv-dev/Scripts/python.exe scripts/data/build_central_profiles.py`: produced 1,000 schema-valid central profiles with 13,411 explicit structured claims and 21,407 evidence units.
+- `.venv-dev/Scripts/python.exe scripts/data/build_concept_catalog.py`: produced 14,116 source-preserved concepts: 13,939 ESCO concepts and 177 O*NET concepts. Twenty-one semantically identical duplicate ESCO rows were collapsed by concept URI.
+- `.venv-dev/Scripts/python.exe scripts/data/map_central_claims.py`: exactly mapped 2,065 of 13,411 claim instances (15.398%); 1,082 were ambiguous and 10,264 unmatched. Across 3,464 unique labels, 274 mapped exactly (7.910%).
+- `.venv-dev/Scripts/python.exe scripts/data/build_occupation_benchmarks.py`: produced 4,055 source-preserved occupation benchmarks (3,039 unique ESCO occupations and 1,016 O*NET occupations) with 177,865 requirements. It retained 4,903 O*NET requirements as suppressed provenance with unavailable numeric ratings. Four semantically identical duplicate ESCO occupation rows were collapsed by concept URI.
+
+Exact mapping measures lexical taxonomy coverage, not extractor accuracy, semantic equivalence, or proficiency. Ambiguous and unmatched claims are retained for review. The filtered-sample selection itself cannot yet be reproduced because its generator was not supplied.
+
 ## Evaluation results
 
 Command: `.venv-dev/Scripts/python.exe scripts/evaluate.py`.

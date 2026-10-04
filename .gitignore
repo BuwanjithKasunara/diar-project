@@ -9,3 +9,9 @@ node_modules/
 .pytest_cache/
 .env
 tmp/
+
+# Downloaded and generated datasets stay local. Keep documentation and manifests tracked.
+data/raw/
+data/interim/
+data/processed/
+data/reports/*.json

@@ -1,0 +1,53 @@
+{
+  "mapping_version": "1.0.0",
+  "central_schema": "central-profile-v1.schema.json",
+  "concept_schema": "concept-catalog-v1.schema.json",
+  "benchmark_schema": "occupation-benchmark-v1.schema.json",
+  "sources": [
+    {
+      "source_id": "synthetic_profiles",
+      "classification": "candidate_profile_source",
+      "mapping_status": "implemented",
+      "destination": "central evidence profile",
+      "rules": [
+        "Map explicit user.skills entries to claimed skill claims with structured-field evidence.",
+        "Keep professional bio, experience title/description, education degree/field/description, project name/description, and credential text as evidence units.",
+        "Exclude employer names, school names, dates, GPA, spoken languages, country, and other demographic or location fields.",
+        "Keep cohort, job family, seniority, seed role, and sample group only under design_labels with excluded_from_model_input=true."
+      ]
+    },
+    {
+      "source_id": "esco",
+      "classification": "benchmark_taxonomy",
+      "mapping_status": "implemented",
+      "destination": "canonical concept and benchmark catalogue",
+      "rules": [
+        "Do not create candidate profiles from ESCO rows.",
+        "Preserve concept URIs as canonical identifiers.",
+        "Use preferred and alternative labels for exact candidate-claim mapping without merging source concepts."
+      ]
+    },
+    {
+      "source_id": "onet",
+      "classification": "benchmark_taxonomy",
+      "mapping_status": "implemented",
+      "destination": "canonical concept and benchmark catalogue",
+      "rules": [
+        "Do not create candidate profiles from O*NET rows.",
+        "Preserve O*NET Element IDs as canonical identifiers.",
+        "Use essential-skill, knowledge, and software labels plus workplace software examples for exact candidate-claim mapping."
+      ]
+    },
+    {
+      "source_id": "skillspan",
+      "classification": "extractor_training_data",
+      "mapping_status": "deferred",
+      "destination": "semantic extractor training and evaluation examples",
+      "rules": [
+        "Do not create candidate profiles from annotated sentences.",
+        "Preserve upstream train, development, and test splits.",
+        "Convert model predictions into central claims only after independent extractor evaluation."
+      ]
+    }
+  ]
+}

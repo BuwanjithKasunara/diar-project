@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diar.local/schemas/concept-catalog-v1.schema.json",
+  "title": "DIAR canonical concept catalogue entry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "concept_id",
+    "source",
+    "source_concept_id",
+    "category",
+    "preferred_label",
+    "aliases",
+    "description"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "concept_id": {"type": "string", "pattern": "^(esco|onet):.+$"},
+    "source": {"enum": ["esco", "onet"]},
+    "source_concept_id": {"type": "string", "minLength": 1},
+    "category": {"enum": ["skill", "knowledge", "tool"]},
+    "preferred_label": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "aliases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "description": {"type": ["string", "null"], "maxLength": 10000}
+  }
+}

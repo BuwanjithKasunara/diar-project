@@ -1,0 +1,5 @@
+source_id,dataset_name,local_path,upstream_url,local_version,role_in_diar,provenance_note
+esco,ESCO,data/raw/esco,https://esco.ec.europa.eu/en/use-esco/download,downloaded snapshot,occupation and skill taxonomy,"Record the exact ESCO release and download checksum before producing a versioned dataset."
+onet,O*NET Database,data/raw/onet,https://www.onetcenter.org/database.html,31.0 August 2026,occupation and capability taxonomy,"The included Read Me states CC BY 4.0; retain attribution in derived artifacts."
+skillspan,SkillSpan,data/raw/skillspan,https://github.com/yzha/SkillSpan,downloaded snapshot,skill and knowledge span annotations,"Preserve the upstream train/dev/test split and verify the exact commit or release before training."
+synthetic_profiles,Synthetic US Candidate Profiles,data/raw/synthetic_profiles,https://huggingface.co/datasets/akzaidan/People,downloaded snapshot,profile-schema design examples,"Synthetic source claim is upstream metadata; filtered sample is governed by ADR 0008 and is not evaluation evidence."

@@ -12,4 +12,7 @@ Preserve accepted decisions. Changed decisions get a new record with reciprocal 
 - [Explicit report persistence](0005-explicit-report-persistence.md)
 - [Privacy-aware role reasoning](0006-privacy-aware-role-reasoning.md)
 - [Capability evidence scoring and factual GitHub observations](0007-capability-evidence-scoring.md)
-
+- [Privacy-filtered synthetic candidate sample](0008-privacy-filtered-candidate-sample.md)
+- [Source-neutral central evidence profile](0009-central-evidence-profile.md)
+- [Exact taxonomy concept mapping before semantic matching](0010-exact-taxonomy-concept-mapping.md)
+- [Source-preserved occupation benchmarks](0011-source-preserved-occupation-benchmarks.md)

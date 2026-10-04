@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diar.local/schemas/occupation-benchmark-v1.schema.json",
+  "title": "DIAR occupation benchmark v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_id",
+    "source",
+    "source_occupation_id",
+    "title",
+    "description",
+    "requirements"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "benchmark_id": {"type": "string", "pattern": "^(esco|onet):.+$"},
+    "source": {"enum": ["esco", "onet"]},
+    "source_occupation_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "description": {"type": ["string", "null"], "maxLength": 20000},
+    "requirements": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/requirement"}
+    }
+  },
+  "$defs": {
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept_id",
+        "category",
+        "relationship",
+        "importance",
+        "level",
+        "not_relevant",
+        "suppressed",
+        "examples",
+        "hot_technology",
+        "in_demand"
+      ],
+      "properties": {
+        "concept_id": {"type": "string", "pattern": "^(esco|onet):.+$"},
+        "category": {"enum": ["skill", "knowledge", "tool"]},
+        "relationship": {"enum": ["essential", "optional", "rated", "software"]},
+        "importance": {"type": ["number", "null"], "minimum": 0},
+        "level": {"type": ["number", "null"], "minimum": 0},
+        "not_relevant": {"type": ["boolean", "null"]},
+        "suppressed": {"type": "boolean"},
+        "examples": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "hot_technology": {"type": ["boolean", "null"]},
+        "in_demand": {"type": ["boolean", "null"]}
+      }
+    }
+  }
+}
