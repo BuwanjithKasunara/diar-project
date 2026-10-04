@@ -1,11 +1,11 @@
 """
-Recommendation Engine (Search Algorithm)
+Recommendation Engine (Priority Ranking Baseline)
 -------------------------------------------
 Takes the rules fired by the Digital Identity Alignment Engine and
 produces an ordered, de-duplicated action plan. This is implemented as
-a best-first priority search over the rule action space: each fired
-rule is a candidate action with a priority weight and a benchmark-
-relevance weight; actions are pushed onto a max-priority queue and
+a priority ranking over fired rules: each fired
+rule is a candidate action with a priority weight;
+actions are pushed onto a max-priority queue and
 popped in order to build the final ranked recommendation list.
 """
 import heapq
@@ -56,7 +56,7 @@ def generate_recommendations(fired_rules: list) -> list:
         ranked.append({
             "rank": rank,
             "priority": rule.get("priority"),
-            "recommendation": _label_for(action),
+            "recommendation": rule.get("title") or _label_for(action),
             "rule_id": rule.get("id"),
             "explanation": rule.get("reason"),
         })

@@ -1,0 +1,746 @@
+{
+  "dataset_version": "1",
+  "provenance": "Authored synthetic development regression fixtures, not held-out evaluation.",
+  "profiles": [
+    {
+      "id": "AI Engineer-Fully Public-skills_only",
+      "role": "AI Engineer",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, machine learning, sql",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "AI Engineer-Fully Public-public_contact",
+      "role": "AI Engineer",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, machine learning, sql\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "AI Engineer-Semi-Public-skills_only",
+      "role": "AI Engineer",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, machine learning, sql",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "AI Engineer-Semi-Public-public_contact",
+      "role": "AI Engineer",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, machine learning, sql\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "AI Engineer-Privacy Focused-skills_only",
+      "role": "AI Engineer",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, machine learning, sql",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "AI Engineer-Privacy Focused-public_contact",
+      "role": "AI Engineer",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, machine learning, sql\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Software Engineer-Fully Public-skills_only",
+      "role": "Software Engineer",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, java, git",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Software Engineer-Fully Public-public_contact",
+      "role": "Software Engineer",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, java, git\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Software Engineer-Semi-Public-skills_only",
+      "role": "Software Engineer",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, java, git",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Software Engineer-Semi-Public-public_contact",
+      "role": "Software Engineer",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, java, git\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Software Engineer-Privacy Focused-skills_only",
+      "role": "Software Engineer",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, java, git",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Software Engineer-Privacy Focused-public_contact",
+      "role": "Software Engineer",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, java, git\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "git",
+        "java",
+        "python"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Data Scientist-Fully Public-skills_only",
+      "role": "Data Scientist",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, statistics, pandas",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Data Scientist-Fully Public-public_contact",
+      "role": "Data Scientist",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, statistics, pandas\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Data Scientist-Semi-Public-skills_only",
+      "role": "Data Scientist",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, statistics, pandas",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Data Scientist-Semi-Public-public_contact",
+      "role": "Data Scientist",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, statistics, pandas\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Data Scientist-Privacy Focused-skills_only",
+      "role": "Data Scientist",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, statistics, pandas",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Data Scientist-Privacy Focused-public_contact",
+      "role": "Data Scientist",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, statistics, pandas\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "pandas",
+        "python",
+        "statistics"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Researcher-Fully Public-skills_only",
+      "role": "Researcher",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, research methodology, academic writing",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Researcher-Fully Public-public_contact",
+      "role": "Researcher",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: python, research methodology, academic writing\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Researcher-Semi-Public-skills_only",
+      "role": "Researcher",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, research methodology, academic writing",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Researcher-Semi-Public-public_contact",
+      "role": "Researcher",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: python, research methodology, academic writing\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Researcher-Privacy Focused-skills_only",
+      "role": "Researcher",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, research methodology, academic writing",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Researcher-Privacy Focused-public_contact",
+      "role": "Researcher",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: python, research methodology, academic writing\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "academic writing",
+        "python",
+        "research methodology"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Entrepreneur-Fully Public-skills_only",
+      "role": "Entrepreneur",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: product management, communication, leadership",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Entrepreneur-Fully Public-public_contact",
+      "role": "Entrepreneur",
+      "visibility": "Fully Public",
+      "linkedin_text": "Skills: product management, communication, leadership\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "public"
+    },
+    {
+      "id": "Entrepreneur-Semi-Public-skills_only",
+      "role": "Entrepreneur",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: product management, communication, leadership",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Entrepreneur-Semi-Public-public_contact",
+      "role": "Entrepreneur",
+      "visibility": "Semi-Public",
+      "linkedin_text": "Skills: product management, communication, leadership\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "selective-sharing"
+    },
+    {
+      "id": "Entrepreneur-Privacy Focused-skills_only",
+      "role": "Entrepreneur",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: product management, communication, leadership",
+      "linkedin_visibility": "unverified",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications"
+      ],
+      "forbidden_rule_ids": [
+        "R10-privacy-contact"
+      ],
+      "expected_sharing": "private"
+    },
+    {
+      "id": "Entrepreneur-Privacy Focused-public_contact",
+      "role": "Entrepreneur",
+      "visibility": "Privacy Focused",
+      "linkedin_text": "Skills: product management, communication, leadership\nContact: synthetic@example.test",
+      "linkedin_visibility": "public",
+      "expected_skills": [
+        "communication",
+        "leadership",
+        "product management"
+      ],
+      "expected_source_statuses": {
+        "resume": "not_supplied",
+        "github": "not_supplied",
+        "linkedin": "analysed"
+      },
+      "expected_rule_ids": [
+        "R4-project",
+        "R7-certifications",
+        "R10-privacy-contact"
+      ],
+      "forbidden_rule_ids": [],
+      "expected_sharing": "private"
+    }
+  ]
+}

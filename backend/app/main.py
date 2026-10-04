@@ -1,39 +1,46 @@
+"""Local single-user API. Analysis is transient; only explicit saving persists data."""
 import json
-import os
-from typing import Optional
-
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+import re
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional, Literal
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from . import database, config
+from .schemas import AnalyzeResponse, SavedReport, ReportHistoryItem
+from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, planner
 
-from . import database
-from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai
-
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
-    BENCHMARKS = json.load(f)
-
-VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
-
-app = FastAPI(
-    title="AI-Based Digital Identity Analysis and Recommendation System",
-    description="Analyses a user's resume, GitHub, and LinkedIn data against a benchmark "
-                "professional identity and generates explainable recommendations.",
-    version="0.1.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+BENCHMARKS = json.loads((Path(__file__).parent / "data/benchmarks.json").read_text())
+known_skills = {skill for category in extraction.SKILLS_DICT.values() for skill in category}
+for name, benchmark in BENCHMARKS.items():
+    unknown = (set(benchmark["required_skills"]) | set(benchmark["preferred_skills"])) - known_skills
+    if unknown:
+        raise ValueError(f"Unknown benchmark skills in {name}: {unknown}")
+VISIBILITY_LEVELS = alignment_engine.VISIBILITY_LEVELS
 
 
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app):
     database.init_db()
+    yield
+
+
+app = FastAPI(title="DIAR", version="0.2.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=config.LOCAL_ORIGINS,
+                   allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
+
+
+def fail(code, message, status=400):
+    raise HTTPException(status_code=status, detail={"code": code, "message": message})
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request, exc):
+    return JSONResponse(status_code=422, content={"detail": {"code": "invalid_request", "message": "Invalid fields or report format."}})
 
 
 @app.get("/api/health")
@@ -43,119 +50,119 @@ def health():
 
 @app.get("/api/benchmarks")
 def list_benchmarks():
-    return [
-        {
-            "name": name,
-            "description": data["description"],
-            "required_skills": data["required_skills"],
-            "preferred_skills": data["preferred_skills"],
-        }
-        for name, data in BENCHMARKS.items()
-    ]
+    return [{"name": name, **{k: b[k] for k in ("description", "required_skills", "preferred_skills")}} for name, b in BENCHMARKS.items()]
 
 
 @app.get("/api/visibility-levels")
-def list_visibility_levels():
+def visibility_levels():
     return VISIBILITY_LEVELS
 
 
-@app.post("/api/analyze")
-async def analyze(
-    benchmark_identity: str = Form(...),
-    visibility_level: str = Form(...),
-    github_username: Optional[str] = Form(None),
-    linkedin_text: Optional[str] = Form(""),
-    resume: Optional[UploadFile] = File(None),
-    db: Session = Depends(database.get_db),
-):
-    if benchmark_identity not in BENCHMARKS:
-        raise HTTPException(status_code=400, detail=f"Unknown benchmark identity '{benchmark_identity}'.")
-    if visibility_level not in VISIBILITY_LEVELS:
-        raise HTTPException(status_code=400, detail=f"Unknown visibility level '{visibility_level}'.")
+@app.get("/api/config")
+def public_config():
+    return {"max_pdf_bytes": config.MAX_PDF_BYTES, "max_pdf_pages": config.MAX_PDF_PAGES,
+            "max_text_chars": config.MAX_TEXT_CHARS, "activity_days": config.ACTIVITY_DAYS}
 
-    # 1. Information Extraction Module
-    resume_text = ""
-    if resume is not None:
-        file_bytes = await resume.read()
+
+def process(benchmark_identity, visibility_level, github_username, linkedin_text, linkedin_visibility, file_bytes):
+    resume = extraction.extract_from_resume_text("")
+    if file_bytes is not None:
         try:
-            resume_text = extraction.extract_text_from_pdf(file_bytes)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Could not read the uploaded resume as a PDF.")
-    resume_data = extraction.extract_from_resume_text(resume_text)
-
-    github_data = {"skills": [], "languages": [], "repo_count": 0, "profile_complete": False}
-    if github_username:
-        github_data = extraction.extract_from_github(github_username.strip())
-
-    linkedin_data = extraction.extract_from_linkedin_text(linkedin_text or "")
-
-    # 2. Identity Construction Module
-    profile = identity_construction.build_digital_identity_profile(resume_data, github_data, linkedin_data)
-
-    # 3. Identity Benchmark Module (lookup) + 4. Digital Identity Alignment Engine
+            resume = extraction.extract_from_resume_text(extraction.extract_text_from_pdf(file_bytes))
+        except ValueError as exc:
+            resume["source_status"] = extraction.status("failed", str(exc))
+    github = extraction.extract_from_github(github_username) if github_username else {
+        "source_status": extraction.status("not_supplied")}
+    linkedin = extraction.extract_from_linkedin_text(linkedin_text, linkedin_visibility)
+    profile = identity_construction.build_digital_identity_profile(resume, github, linkedin)
+    if not profile["sources_provided_count"]:
+        reasons = [s["reason"] for s in profile["source_statuses"].values() if s["reason"]]
+        fail("no_usable_source", "No usable source. " + (" ".join(reasons) or "Supply PDF text, GitHub, or LinkedIn text."))
     benchmark = BENCHMARKS[benchmark_identity]
-    alignment_result = alignment_engine.run_alignment(profile, benchmark, benchmark_identity, visibility_level)
-
-    # 5. Recommendation Engine
-    recommendations = recommendation_engine.generate_recommendations(alignment_result["fired_rules"])
-
-    # 6. Explainable AI Module
-    explanation_summary = explainable_ai.build_explanation_summary(
-        profile, benchmark_identity, alignment_result["gap_analysis"],
-        alignment_result["visibility_assessment"], recommendations,
-    )
-
-    benchmark_comparison = {
-        "benchmark_identity": benchmark_identity,
-        "benchmark_description": benchmark["description"],
-        "matched_skills": alignment_result["gap_analysis"]["matched_skills"],
-        "missing_required_skills": alignment_result["gap_analysis"]["missing_required_skills"],
-        "missing_preferred_skills": alignment_result["gap_analysis"]["missing_preferred_skills"],
+    aligned = alignment_engine.run_alignment(profile, benchmark, benchmark_identity, visibility_level)
+    recommendations = recommendation_engine.generate_recommendations(aligned["fired_rules"])
+    explanation = explainable_ai.build_explanation_summary(profile, benchmark_identity, aligned["gap_analysis"],
+                                                          aligned["visibility_assessment"], recommendations)
+    explanation["rules_fired_count"] = len(aligned["fired_rules"])
+    return {
+        "schema_version": 2, "benchmark_version": config.BENCHMARK_VERSION, "planner_version": config.PLANNER_VERSION,
+        "benchmark_identity": benchmark_identity, "visibility_level": visibility_level, "github_username": github_username,
+        "digital_identity_profile": profile, "source_statuses": profile["source_statuses"], "evidence": profile["evidence"],
+        "benchmark_comparison": {"benchmark_identity": benchmark_identity, "benchmark_description": benchmark["description"],
+                                  **{k: aligned["gap_analysis"][k] for k in ("matched_skills", "missing_required_skills", "missing_preferred_skills")}},
+        "gap_analysis": aligned["gap_analysis"], "visibility_assessment": aligned["visibility_assessment"],
+        "recommendations": recommendations, "explanation_summary": explanation,
+        "github_warning": github.get("error"),
+        "suggested_plan": planner.generate_plan(aligned["objectives"], benchmark_identity, visibility_level, profile["skills"], recommendations),
+        "clarification_requests": aligned["clarification_requests"],
     }
 
-    report_payload = {
-        "digital_identity_profile": profile,
-        "benchmark_comparison": benchmark_comparison,
-        "gap_analysis": alignment_result["gap_analysis"],
-        "visibility_assessment": alignment_result["visibility_assessment"],
-        "recommendations": recommendations,
-        "explanation_summary": explanation_summary,
-        "github_warning": github_data.get("error"),
-    }
 
-    # 7. Persist Digital Identity Report
-    db_report = database.Report(
-        benchmark_identity=benchmark_identity,
-        visibility_level=visibility_level,
-        github_username=github_username,
-        report_json=json.dumps(report_payload),
-    )
-    db.add(db_report)
-    db.commit()
-    db.refresh(db_report)
+@app.post("/api/analyze", response_model=AnalyzeResponse)
+async def analyze(benchmark_identity: str = Form(...), visibility_level: str = Form(...),
+                  github_username: Optional[str] = Form(None), linkedin_text: str = Form(""),
+                  linkedin_visibility: Literal["unverified", "public", "private"] = Form("unverified"),
+                  resume: Optional[UploadFile] = File(None)):
+    if benchmark_identity not in BENCHMARKS:
+        fail("unknown_benchmark", "Select a supported benchmark.")
+    if visibility_level not in VISIBILITY_LEVELS:
+        fail("unknown_visibility", "Select a supported visibility level.")
+    username = github_username.strip() if github_username else None
+    if username and not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", username):
+        fail("invalid_username", "Use a GitHub username, not a URL.")
+    if len(linkedin_text) > config.MAX_TEXT_CHARS:
+        fail("text_too_large", "Pasted text exceeds the configured character limit.", 413)
+    if not username and not linkedin_text.strip() and resume is None:
+        fail("no_input", "Supply at least one source.")
+    file_bytes = None
+    if resume is not None:
+        try:
+            file_bytes = await resume.read(config.MAX_PDF_BYTES + 1)
+        finally:
+            await resume.close()
+        if len(file_bytes) > config.MAX_PDF_BYTES:
+            fail("pdf_too_large", "PDF exceeds the configured byte limit.", 413)
+    return await run_in_threadpool(process, benchmark_identity, visibility_level, username or None,
+                                   linkedin_text, linkedin_visibility, file_bytes)
 
-    return {"id": db_report.id, **report_payload}
+
+@app.post("/api/reports", response_model=SavedReport, status_code=201)
+def save_report(report: AnalyzeResponse, db: Session = Depends(database.get_db)):
+    if report.benchmark_identity not in BENCHMARKS:
+        fail("unknown_benchmark", "Unknown report benchmark.")
+    row = database.Report(benchmark_identity=report.benchmark_identity, visibility_level=report.visibility_level,
+                          github_username=report.github_username, report_json=report.model_dump_json())
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        fail("storage_error", "Report could not be saved.", 503)
+    return {**report.model_dump(), "id": row.id, "created_at": row.created_at.isoformat()}
 
 
-@app.get("/api/reports")
+@app.get("/api/reports", response_model=list[ReportHistoryItem])
 def list_reports(db: Session = Depends(database.get_db)):
-    reports = db.query(database.Report).order_by(database.Report.id.desc()).limit(50).all()
-    return [
-        {
-            "id": r.id,
-            "benchmark_identity": r.benchmark_identity,
-            "visibility_level": r.visibility_level,
-            "github_username": r.github_username,
-            "created_at": r.created_at.isoformat(),
-        }
-        for r in reports
-    ]
+    return [{"id": r.id, "benchmark_identity": r.benchmark_identity, "visibility_level": r.visibility_level,
+             "github_username": r.github_username, "created_at": r.created_at.isoformat()}
+            for r in db.query(database.Report).order_by(database.Report.id.desc()).limit(50).all()]
 
 
 @app.get("/api/reports/{report_id}")
 def get_report(report_id: int, db: Session = Depends(database.get_db)):
-    r = db.query(database.Report).filter(database.Report.id == report_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="Report not found.")
-    payload = json.loads(r.report_json)
-    return {"id": r.id, "created_at": r.created_at.isoformat(), **payload}
+    row = db.get(database.Report, report_id)
+    if row is None:
+        fail("not_found", "Report not found.", 404)
+    # Do not reinterpret legacy reports with new scores or invented evidence.
+    return {**json.loads(row.report_json), "id": row.id, "created_at": row.created_at.isoformat()}
+
+
+@app.delete("/api/reports/{report_id}", status_code=204)
+def delete_report(report_id: int, db: Session = Depends(database.get_db)):
+    row = db.get(database.Report, report_id)
+    if row is None:
+        fail("not_found", "Report not found.", 404)
+    db.delete(row)
+    db.commit()
+    return Response(status_code=204)

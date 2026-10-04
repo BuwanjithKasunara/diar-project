@@ -17,10 +17,10 @@ from typing import Tuple
 
 def _triangular(x: float, a: float, b: float, c: float) -> float:
     """Standard triangular membership function with foot points a, c and peak b."""
-    if x <= a or x >= c:
-        return 0.0
     if x == b:
         return 1.0
+    if x <= a or x >= c:
+        return 0.0
     if x < b:
         return (x - a) / (b - a)
     return (c - x) / (c - b)
@@ -34,7 +34,8 @@ def skill_match_degree(user_skills: set, required_skills: set, preferred_skills:
 
     required_hit = len(user_skills & required_skills) / max(1, len(required_skills))
     preferred_hit = len(user_skills & preferred_skills) / max(1, len(preferred_skills))
-    score = 0.7 * required_hit + 0.3 * preferred_hit  # weighted crisp ratio, 0..1
+    weights = (0.7 if required_skills else 0) + (0.3 if preferred_skills else 0)
+    score = (0.7 * required_hit + 0.3 * preferred_hit) / weights
 
     low = _triangular(score, -0.2, 0.0, 0.5)
     moderate = _triangular(score, 0.15, 0.5, 0.85)
@@ -48,7 +49,7 @@ def activity_degree(recently_active_repos: int, total_repos: int) -> Tuple[float
     """Fuzzy degree of GitHub activity level."""
     if total_repos == 0:
         return 0.0, "inactive"
-    ratio = recently_active_repos / total_repos
+    ratio = max(0.0, min(1.0, recently_active_repos / total_repos))
 
     inactive = _triangular(ratio, -0.2, 0.0, 0.25)
     moderate = _triangular(ratio, 0.1, 0.4, 0.7)
@@ -70,3 +71,14 @@ def completeness_degree(flags: dict) -> Tuple[float, str]:
 
     label, _ = max([("incomplete", incomplete), ("partial", partial), ("complete", complete)], key=lambda t: t[1])
     return round(ratio, 3), label
+
+
+def memberships(score, kind):
+    if score is None:
+        return {}
+    groups = {
+        'skill': [('low', -0.2, 0, 0.5), ('moderate', 0.15, 0.5, 0.85), ('strong', 0.5, 1, 1.2)],
+        'activity': [('inactive', -0.2, 0, 0.25), ('moderate', 0.1, 0.4, 0.7), ('active', 0.5, 1, 1.2)],
+        'completeness': [('incomplete', -0.2, 0, 0.4), ('partial', 0.2, 0.5, 0.8), ('complete', 0.6, 1, 1.2)],
+    }
+    return {label: round(_triangular(score, a, b, c), 4) for label, a, b, c in groups[kind]}

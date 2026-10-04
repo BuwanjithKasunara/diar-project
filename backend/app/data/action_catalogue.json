@@ -1,0 +1,17 @@
+{
+  "version": "1",
+  "cost_units": "relative effort, not time or demonstrated competence",
+  "templates": {
+    "profile": {"cost": 1, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
+    "learn": {"cost": 2, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
+    "project": {"cost": 3, "prerequisites": [], "visibilities": ["Fully Public", "Semi-Public", "Privacy Focused"]},
+    "privacy": {"cost": 1, "prerequisites": [], "visibilities": ["Semi-Public", "Privacy Focused"]}
+  },
+  "projects": {
+    "AI Engineer": {"title": "Build a documented model-serving project", "skills": ["python", "machine learning", "sql"], "prerequisite_skills": ["python"]},
+    "Software Engineer": {"title": "Build a tested application", "skills": ["python", "git", "sql"], "prerequisite_skills": ["python"]},
+    "Data Scientist": {"title": "Build a reproducible data analysis", "skills": ["python", "pandas", "numpy", "statistics"], "prerequisite_skills": ["python"]},
+    "Researcher": {"title": "Prepare a reproducible research portfolio", "skills": ["research methodology", "academic writing", "literature review"], "prerequisite_skills": ["research methodology"]},
+    "Entrepreneur": {"title": "Document a product discovery project", "skills": ["product management", "communication", "business development"], "prerequisite_skills": ["product management"]}
+  }
+}
