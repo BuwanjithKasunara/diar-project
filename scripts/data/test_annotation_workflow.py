@@ -6,7 +6,9 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from create_review_templates import create_templates
+from export_blind_adjudication import export_blind_queue
 from prepare_annotation_batches import level_tasks, mapping_tasks, write_jsonl
+from prepare_expanded_level_batch import prepare_expanded_batch
 from review_annotations import reconcile, validate_annotation
 
 
@@ -160,6 +162,66 @@ class AnnotationWorkflowTests(unittest.TestCase):
         write_jsonl(first, [item], replace=True)
         with self.assertRaisesRegex(ValueError, "human edits"):
             create_templates(tasks_path, destination, "level", refresh_unanswered=True)
+
+    def test_single_adjudicator_template_uses_blind_tasks(self):
+        task = level_tasks([profile(group, index + 1, True) for index, group in enumerate(GROUPS)], 1)[0][0]
+        tasks_path = self.root / "blind-tasks.jsonl"
+        write_jsonl(tasks_path, [task], replace=False)
+        destination = self.root / "adjudicator"
+        summary = create_templates(
+            tasks_path, destination, "level", reviewer_names=("human-adjudicator",),
+        )
+        self.assertEqual(summary, {"tasks": 1, "reviewer_files": 1})
+        item = json.loads((destination / "level_human-adjudicator.jsonl").read_text(encoding="utf-8"))
+        self.assertEqual(item["task_digest"], task["task_digest"])
+        self.assertEqual(item["reviewer_id"], "")
+        self.assertNotIn("first_annotation", item)
+        with self.assertRaisesRegex(ValueError, "filename-safe"):
+            create_templates(tasks_path, destination, "level", reviewer_names=("../outside",))
+
+    def test_blind_adjudication_export_omits_prior_answers(self):
+        task = level_tasks([profile(group, index + 1, True) for index, group in enumerate(GROUPS)], 1)[0][0]
+        tasks_path = self.root / "tasks.jsonl"
+        queue_path = self.root / "queue.jsonl"
+        output_path = self.root / "blind.jsonl"
+        write_jsonl(tasks_path, [task], replace=False)
+        write_jsonl(queue_path, [{
+            "task": task,
+            "first_annotation": answer(task, "reviewer-one", "applied", [task["evidence"][1]["evidence_id"]]),
+            "second_annotation": answer(task, "reviewer-two", "insufficient_evidence", []),
+        }], replace=False)
+        result = export_blind_queue(queue_path, tasks_path, output_path, "level")
+        self.assertEqual(result["tasks"], 1)
+        self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), task)
+        with self.assertRaises(FileExistsError):
+            export_blind_queue(queue_path, tasks_path, output_path, "level")
+
+    def test_expanded_batch_excludes_pilot_profiles(self):
+        profiles = []
+        excluded = []
+        for index, group in enumerate(GROUPS):
+            pilot = profile(group, index * 10 + 1, False)
+            profiles.extend([
+                pilot,
+                profile(group, index * 10 + 2, True),
+                profile(group, index * 10 + 3, False),
+            ])
+            excluded.append({"profile_id": pilot["profile_id"]})
+        profiles_path = self.root / "profiles.jsonl"
+        excluded_path = self.root / "pilot-manifest.jsonl"
+        write_jsonl(profiles_path, profiles, replace=False)
+        write_jsonl(excluded_path, excluded, replace=False)
+        output_dir = self.root / "expanded"
+        summary = prepare_expanded_batch(profiles_path, excluded_path, output_dir, per_group=2)
+        self.assertEqual(summary["level_task_count"], 10)
+        self.assertEqual(summary["human_labels_assigned"], 0)
+        public = [json.loads(line) for line in (output_dir / "level_tasks.jsonl").read_text(encoding="utf-8").splitlines()]
+        internal = [json.loads(line) for line in (output_dir / "level_internal_manifest.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(public), 10)
+        self.assertFalse({row["profile_id"] for row in internal} & {row["profile_id"] for row in excluded})
+        self.assertTrue(all("profile_id" not in task for task in public))
+        with self.assertRaises(FileExistsError):
+            prepare_expanded_batch(profiles_path, excluded_path, output_dir, per_group=2)
 
 
 if __name__ == "__main__":

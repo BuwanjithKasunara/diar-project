@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from map_central_claims import read_jsonl
 from prepare_annotation_batches import write_jsonl
 
 
-def create_templates(tasks_path: Path, output_dir: Path, kind: str, refresh_unanswered: bool = False) -> dict[str, int]:
+def create_templates(
+    tasks_path: Path, output_dir: Path, kind: str, refresh_unanswered: bool = False,
+    reviewer_names: tuple[str, ...] | None = None,
+) -> dict[str, int]:
     tasks = list(read_jsonl(tasks_path))
     if not tasks or any(task.get("kind") != kind for task in tasks):
         raise ValueError("task file is empty or contains a different review kind")
-    names = ("reviewer-a", "reviewer-b")
+    names = reviewer_names or ("reviewer-a", "reviewer-b")
+    if len(set(names)) != len(names) or any(not re.fullmatch(r"[A-Za-z0-9_-]+", name) for name in names):
+        raise ValueError("reviewer names must be unique filename-safe identifiers")
     paths = [output_dir / f"{kind}_{name}.jsonl" for name in names]
     for path in paths:
         if not path.exists():
@@ -52,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tasks", type=Path, required=True)
     parser.add_argument("--kind", choices=("mapping", "level"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--reviewer", action="append", dest="reviewers", help="template filename suffix; repeat for multiple reviewers")
     parser.add_argument("--refresh-unanswered", action="store_true")
     return parser.parse_args()
 
@@ -59,7 +66,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     summary = create_templates(
-        args.tasks.resolve(), args.output_dir.resolve(), args.kind, args.refresh_unanswered
+        args.tasks.resolve(), args.output_dir.resolve(), args.kind, args.refresh_unanswered,
+        tuple(args.reviewers) if args.reviewers else None,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0

@@ -32,7 +32,17 @@ Exact mapping measures lexical taxonomy coverage, not extractor accuracy, semant
 
 The local packet builder produced 125 mapping tasks (50 ambiguous, 50 unmatched, 25 exact-match audit) and 50 profile-skill level tasks. The level tasks use 10 distinct profiles from each of five source groups; 25 have a direct skill mention in professional text and 25 require broader context review. Public task records contain no `profile_id`, `cohort`, `seniority`, `job_family`, `seed_role`, or `sample_group` fields. Two blank response templates were created per task type. `labels_assigned` is 0.
 
-After adding a task-content digest check and one additional mapping-validation case, the final focused annotation and concept-mapping run passed all 11 tests. The documentation checker reported 0 errors, and `git diff --check` completed without whitespace errors. No reviewer decisions, adjudications, or model-ready labels exist yet.
+After adding a task-content digest check and one additional mapping-validation case, the final focused annotation and concept-mapping run passed all 11 tests. The documentation checker reported 0 errors, and `git diff --check` completed without whitespace errors. At that stage, no reviewer decisions or model-ready labels existed.
+
+## AI pilot review, 2026-10-05
+
+GPT-6 Sol Medium and Sol High independently answered the public synthetic pilot packets. The existing validator accepted both complete files. Initial agreement was 87/125 concept mappings (69.6%) and 48/50 per-skill evidence levels (96%). A blind GPT-6 Astra Low review then answered only the 38 mapping and 2 level disagreements; validation accepted all 40 answers. The two original disagreement queues remain saved locally, and separate three-model reconciliation reports record 125/125 mapping and 50/50 level decisions with no pending AI adjudications.
+
+Astra's 38 mapping decisions matched Sol Medium in 25 cases, Sol High in 4, and neither in 9. Many disputes concerned a named product versus a broad software category. The rubric and [ADR 0013](../../adr/0013-specificity-in-concept-review.md) now make that distinction explicit for future human annotation. The AI files were produced under the earlier rubric and were not retroactively changed. They are pilot judgments on synthetic profiles, not independent human ground truth, representative performance estimates, or XGBoost training targets.
+
+The blind dispute exporter produced task-only packets of 38 mapping and two level cases. Blank human adjudicator templates contain the same number of rows. A separate expanded synthetic batch contains 100 unlabelled profile-skill tasks, 20 per design group, with 50 direct and 50 indirect skill mentions and no overlap with the 50 pilot profiles. Two blank human reviewer templates contain 100 rows each. Public packets were checked for generation-label fields; none were present. This is a balanced synthetic design batch, not a representative sample of real users.
+
+After these workflow changes, `.venv-dev/Scripts/python.exe -m pytest scripts/data/test_annotation_workflow.py scripts/data/test_concept_mapping.py -q` passed 14 tests. `scripts/check_docs.py` reported 0 errors and `git diff --check` reported no whitespace errors. The three-model reconciliation validator accepted every AI annotation. No human labels or model training results exist.
 
 ## Evaluation results
 

@@ -13,6 +13,15 @@ Review the claim text, sample contexts, candidate concept labels, categories, an
 
 The public mapping packet omits the pipeline's lexical status and frequency. They are retained only in the local internal manifest for coverage analysis. A reviewer may correct an exact lexical match or select a catalogue ID absent from the initial candidate list, provided the rationale explains the choice.
 
+### Mapping specificity checks
+
+- Read the concept definition and source category, not just the preferred label. A named product such as a particular analytics tool is not automatically synonymous with a broad concept such as "analytical software," even if the source lists that product as an example. Search for a product-specific concept first. If only a broader category exists, use `none` for this *canonical* concept decision and name the related category in the rationale; a separate typed relationship would be needed to preserve that broader link.
+- Use `needs_context` when the claim has two or more plausible meanings and the supplied text cannot choose between them. Use `none` when the meaning is clear but the catalogue lacks a sufficiently specific concept. Do not use `needs_context` merely because a product-specific concept is absent.
+- Use `multiple_valid` only when the supplied meaning independently supports every selected concept. A broad category and its narrower instance do not become two canonical matches simply because both are related.
+- Treat a lexical match as a candidate, not a verdict. If its definition does not fit the claim in context, reject it and explain why.
+
+These checks were clarified after the three-model synthetic pilot exposed repeated category-versus-product disagreements. The AI decisions remain provisional; a human reviewer should apply this clarified rubric to the disputed tasks rather than treating any model's choice as ground truth.
+
 ## Evidence-level decisions
 
 Assess the target skill using only the evidence in that task. Select one label:
@@ -23,6 +32,8 @@ Assess the target skill using only the evidence in that task. Select one label:
 - `advanced`: evidence shows complex design, debugging, evaluation of trade-offs, improvement, or teaching of the target skill across meaningful work. A senior title, years of experience, or one unsupported superlative does not qualify.
 
 For every positive label, cite at least one `evidence_id` from a professional evidence unit beyond `stated_skill`. The validator enforces this minimum; reviewers still need to judge whether the cited text truly supports the target. Explain the decision in `rationale`. If evidence conflicts or the task is unclear, choose `insufficient_evidence` and describe the conflict.
+
+For `applied` versus `advanced`, look for complexity in the **target skill itself**. A senior title, team leadership, or a quantified result in the surrounding project does not raise a routine use of that skill to `advanced`. For `foundational` versus `applied`, distinguish assisted participation in an established process from clearly owned decisions or deliverables. If the text leaves that responsibility unclear, explain the uncertainty instead of inferring it from the job title.
 
 Reviewers must not use synthetic `cohort`, `seniority`, `job_family`, `seed_role`, or `sample_group` as labels or clues. These fields are absent from public review packets. An evidence excerpt may contain a role title or duration; those alone do not determine a level. O*NET occupation `level` ratings describe an occupation requirement and never label a candidate.
 
@@ -53,3 +64,18 @@ When both reviewers finish a packet, run its reconciliation command. For mapping
 ```
 
 For levels, use `--kind level`, `level_tasks.jsonl`, the two `level_reviewer-*.jsonl` files, and a separate `level_review` output directory. If there are disagreements, give the `needs_adjudication.jsonl` queue to a third reviewer and run the same command with `--adjudication <third-reviewer-file> --replace`. `resolved.jsonl` retains the original answers and the final decision. The report records agreement and remaining disagreements; it does not create XGBoost training data.
+
+### Pilot dispute and expanded synthetic packets
+
+The pilot's AI disagreement queues are local under `data/annotation_batches/pilot_v1/ai_mapping_review/` and `ai_level_review/`. The `blind_adjudication_tasks.jsonl` files contain only the disputed tasks; they omit both AI answers. The blank `mapping_human-adjudicator.jsonl` and `level_human-adjudicator.jsonl` files in `pilot_v1/annotations/` are for a future human reviewer. That reviewer should use the clarified specificity checks above and fill their own stable `reviewer_id`. The three-model AI reconciliation under `ai_mapping_astra_review/` and `ai_level_astra_review/` is a workflow pilot and must stay separate from human review.
+
+To regenerate a blind packet from a fresh disagreement queue, use `scripts/data/export_blind_adjudication.py` with `--kind`, `--queue`, `--tasks`, and `--output`. It verifies that every queued task is unchanged from the original packet and refuses to overwrite an existing blind packet. `create_review_templates.py --reviewer human-adjudicator` creates one blank response file from that blind packet; without `--reviewer`, it creates the two normal independent-review templates. Existing answers are protected from accidental replacement.
+
+The 100-task expanded synthetic packet is prepared with:
+
+```powershell
+.venv-dev\Scripts\python.exe scripts\data\prepare_expanded_level_batch.py
+.venv-dev\Scripts\python.exe scripts\data\create_review_templates.py --kind level --tasks data\annotation_batches\expanded_synthetic_v1\level_tasks.jsonl --output-dir data\annotation_batches\expanded_synthetic_v1\annotations
+```
+
+It excludes all 50 pilot profiles, selects 20 distinct profiles per design group, and balances direct and indirect skill mentions. Two humans should complete `level_reviewer-a.jsonl` and `level_reviewer-b.jsonl` independently. The packet contains synthetic profiles only; its design balance does not establish real-user representativeness. Do not train or evaluate XGBoost as a validated knowledge-level model until sufficient human labels from representative profiles and a profile-level held-out evaluation set exist.

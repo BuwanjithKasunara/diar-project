@@ -15,5 +15,7 @@ The improvement working tree was prepared with coding-assistant support. Code, t
 
 The dataset annotation stage has a [review rubric](../testing/annotation-rubric.md), versioned [annotation schema](../../data/schema/review-annotation-v1.schema.json), and local packet/reconciliation scripts. The pilot packets and blank response files are generated work products; they do not establish that any team member performed the independent reviews.
 
+On 2026-10-05, three configured AI reviewers completed a synthetic pilot, with blind third review of 40 disputed cases. The work produced local AI annotations, a clarified concept-specificity rule, and a separate 100-task synthetic packet with blank human response templates. No human annotation or validated XGBoost target has been produced; do not attribute these AI judgments to project members.
+
 Before submission, members must confirm actual tasks and references to commits, reviews, test records, or artifacts. Describe assistance accurately; never infer contribution from module ownership.
 
