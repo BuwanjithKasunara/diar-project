@@ -19,9 +19,6 @@ __pycache__/
 *.pkl
 
 
-# Documents (keep local only)
-*.docx
-
 # OS & Editor
 .vscode/
 .idea/
