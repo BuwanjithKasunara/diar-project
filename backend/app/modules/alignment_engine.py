@@ -2,53 +2,124 @@
 Digital Identity Alignment Engine
 ------------------------------------
 Core reasoning component. Combines Rule-Based Reasoning with Fuzzy
-Logic degrees (from fuzzy_logic.py) to compare the user's Digital
-Identity Profile against the selected Benchmark Identity, taking the
-user's preferred visibility level into account.
+Logic degrees (from fuzzy_logic.py) and a Multi-Factor Contextual Scoring
+model to compare the user's Digital Identity Profile against the selected
+Benchmark Identity, taking the user's preferred visibility level into account.
 
-Every fired rule is recorded with a machine-readable "id" and a
-human-readable "reason" so the Explainable AI Module can trace every
-recommendation back to the rule(s) that produced it.
+Enhancements:
+- Multi-factor scoring incorporating claimed, uncertain, and planned skill weights.
+- Explicit source state tracking (insufficient evidence detection).
+- GitHub recency and stale codebase penalties.
+- Negation and planned-intent aware rule generation.
+- Granular privacy compliance evaluation.
 """
+from typing import Dict, Any, List, Set
 from . import fuzzy_logic
 
 VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
 
 
 def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibility_level: str) -> dict:
-    fired_rules = []
+    fired_rules: List[Dict[str, Any]] = []
 
-    user_skills = set(profile.get("skills", []))
+    # 1. Retrieve Contextual Skills
+    ctx = profile.get("contextual_skills", {})
+    claimed_skills = set(ctx.get("claimed", profile.get("skills", [])))
+    uncertain_skills = set(ctx.get("uncertain", []))
+    planned_skills = set(ctx.get("planned", []))
+    negated_skills = set(ctx.get("negated", []))
+    norm_weights = ctx.get("normalized_weights", {})
+
+    active_user_skills = claimed_skills | uncertain_skills
+
     required_skills = set(benchmark.get("required_skills", []))
     preferred_skills = set(benchmark.get("preferred_skills", []))
 
-    missing_required = sorted(required_skills - user_skills)
-    missing_preferred = sorted(preferred_skills - user_skills)
-    matched_skills = sorted(user_skills & (required_skills | preferred_skills))
+    missing_required = sorted(required_skills - active_user_skills)
+    missing_preferred = sorted(preferred_skills - active_user_skills)
+    matched_skills = sorted(active_user_skills & (required_skills | preferred_skills))
 
-    skill_score, skill_label = fuzzy_logic.skill_match_degree(user_skills, required_skills, preferred_skills)
+    # 2. Multi-Factor Contextual Scoring Engine
+    total_req_points = 0.0
+    earned_req_points = 0.0
+    for r in required_skills:
+        w = norm_weights.get(r, 1.0)
+        total_req_points += 1.0 * w
+        if r in claimed_skills:
+            earned_req_points += 1.0 * w
+        elif r in uncertain_skills:
+            earned_req_points += 0.5 * w
+        elif r in planned_skills:
+            earned_req_points += 0.25 * w  # trajectory credit for learning intent
+        elif r in negated_skills:
+            earned_req_points += 0.0
 
-    # --- Rule Group 1: Skill gap rules ---
+    total_pref_points = 0.0
+    earned_pref_points = 0.0
+    for p in preferred_skills:
+        w = norm_weights.get(p, 1.0)
+        total_pref_points += 0.5 * w
+        if p in claimed_skills:
+            earned_pref_points += 0.5 * w
+        elif p in uncertain_skills:
+            earned_pref_points += 0.25 * w
+        elif p in planned_skills:
+            earned_pref_points += 0.125 * w
+
+    denom = (total_req_points + total_pref_points) or 1.0
+    multi_factor_score = round(min(1.0, (earned_req_points + earned_pref_points) / denom), 3)
+
+    # Fuzzy logic match degree
+    fuzzy_skill_score, fuzzy_skill_label = fuzzy_logic.skill_match_degree(
+        active_user_skills, required_skills, preferred_skills
+    )
+
+    # 3. Context-Aware Rule Group 1: Skill Gap Rules
     for skill in missing_required:
-        fired_rules.append({
-            "id": f"R1-{skill}",
-            "condition": f"benchmark='{benchmark_name}' AND required skill '{skill}' not detected",
-            "action": f"recommend_learning:{skill}",
-            "priority": "high",
-            "reason": f"'{skill}' is a required skill for the '{benchmark_name}' benchmark and was not "
-                      f"found in the user's resume, GitHub, or LinkedIn data."
-        })
-    for skill in missing_preferred:
-        fired_rules.append({
-            "id": f"R2-{skill}",
-            "condition": f"benchmark='{benchmark_name}' AND preferred skill '{skill}' not detected",
-            "action": f"recommend_learning:{skill}",
-            "priority": "medium",
-            "reason": f"'{skill}' is a preferred (non-mandatory) skill for '{benchmark_name}' that would "
-                      f"strengthen the profile if added."
-        })
+        if skill in planned_skills:
+            fired_rules.append({
+                "id": f"R1-planned-{skill}",
+                "condition": f"benchmark='{benchmark_name}' AND required skill '{skill}' marked as planned",
+                "action": f"accelerate_learning:{skill}",
+                "priority": "high",
+                "reason": f"You noted a plan to learn '{skill}'. Prioritizing this will directly resolve a required competency for '{benchmark_name}'."
+            })
+        elif skill in negated_skills:
+            fired_rules.append({
+                "id": f"R1-negated-{skill}",
+                "condition": f"benchmark='{benchmark_name}' AND required skill '{skill}' explicitly negated",
+                "action": f"structured_training:{skill}",
+                "priority": "high",
+                "reason": f"Your profile explicitly noted lack of experience in '{skill}', which is mandatory for '{benchmark_name}'."
+            })
+        else:
+            fired_rules.append({
+                "id": f"R1-{skill}",
+                "condition": f"benchmark='{benchmark_name}' AND required skill '{skill}' not detected",
+                "action": f"recommend_learning:{skill}",
+                "priority": "high",
+                "reason": f"'{skill}' is a required skill for '{benchmark_name}' and was not found in the user's data."
+            })
 
-    # --- Rule Group 2: Experience rules ---
+    for skill in missing_preferred:
+        if skill in planned_skills:
+            fired_rules.append({
+                "id": f"R2-planned-{skill}",
+                "condition": f"benchmark='{benchmark_name}' AND preferred skill '{skill}' marked as planned",
+                "action": f"continue_learning:{skill}",
+                "priority": "medium",
+                "reason": f"'{skill}' is a preferred skill that you plan to learn; this will strengthen your competitive edge."
+            })
+        else:
+            fired_rules.append({
+                "id": f"R2-{skill}",
+                "condition": f"benchmark='{benchmark_name}' AND preferred skill '{skill}' not detected",
+                "action": f"recommend_learning:{skill}",
+                "priority": "medium",
+                "reason": f"'{skill}' is a preferred (non-mandatory) skill for '{benchmark_name}' that would strengthen the profile if added."
+            })
+
+    # Rule Group 2: Experience rules
     min_years = benchmark.get("min_experience_years", 0)
     years = profile.get("estimated_years_experience", 0)
     if years < min_years:
@@ -57,115 +128,134 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
             "condition": f"estimated_experience({years}y) < benchmark_min({min_years}y)",
             "action": "recommend_gaining_experience",
             "priority": "medium",
-            "reason": f"The benchmark '{benchmark_name}' typically expects at least {min_years} year(s) of "
-                      f"relevant experience; the resume suggests approximately {years}."
+            "reason": f"The benchmark '{benchmark_name}' typically expects at least {min_years} year(s) of relevant experience; the profile suggests approximately {years}."
         })
 
-    # --- Rule Group 3: GitHub project / activity rules (fuzzy) ---
-    repo_count = profile.get("github", {}).get("repo_count", 0)
-    active_count = profile.get("github", {}).get("recently_active_repo_count", 0)
+    # Rule Group 3: GitHub Activity, Recency & State Tracking
+    github_data = profile.get("github", {})
+    gh_state = github_data.get("state", "not_supplied")
+    repo_count = github_data.get("repo_count", 0)
+    active_count = github_data.get("recently_active_repo_count", 0)
+    stale_count = github_data.get("stale_repo_count", 0)
     min_repos = benchmark.get("min_github_repos", 0)
-    activity_score, activity_label = fuzzy_logic.activity_degree(active_count, max(repo_count, 1))
 
-    if repo_count < min_repos:
+    if gh_state in ("not_supplied", "failed"):
+        activity_score = 0.0
+        activity_label = "insufficient_evidence"
         fired_rules.append({
-            "id": "R4-repo-count",
-            "condition": f"github_repo_count({repo_count}) < benchmark_min({min_repos})",
-            "action": "recommend_building_portfolio_projects",
+            "id": "R4-github-insufficient-evidence",
+            "condition": f"github_source_state='{gh_state}'",
+            "action": "provide_github_profile",
             "priority": "high",
-            "reason": f"'{benchmark_name}' benchmark profiles typically showcase at least {min_repos} "
-                      f"public repositories; this GitHub profile has {repo_count}."
+            "reason": f"GitHub source is '{gh_state}'. Public code evidence cannot be verified without a valid GitHub username."
         })
-    if activity_label == "inactive" and repo_count > 0:
-        fired_rules.append({
-            "id": "R5-activity",
-            "condition": f"github_activity_degree={activity_score} -> '{activity_label}'",
-            "action": "recommend_increasing_github_activity",
-            "priority": "medium",
-            "reason": "Fuzzy analysis classifies recent GitHub activity as 'inactive' "
-                      "(few or no repositories updated recently), which can weaken perceived engagement."
-        })
+    else:
+        activity_score, activity_label = fuzzy_logic.activity_degree(active_count, max(repo_count, 1))
 
-    min_langs = benchmark.get("min_github_languages", 0)
-    langs = len(profile.get("github", {}).get("languages", []))
-    if langs < min_langs:
-        fired_rules.append({
-            "id": "R6-languages",
-            "condition": f"github_language_diversity({langs}) < benchmark_min({min_langs})",
-            "action": "recommend_diversifying_projects",
-            "priority": "low",
-            "reason": f"Benchmark identities in this field typically demonstrate at least {min_langs} "
-                      f"distinct programming languages across repositories; {langs} detected."
-        })
+        if repo_count < min_repos:
+            fired_rules.append({
+                "id": "R4-repo-count",
+                "condition": f"github_repo_count({repo_count}) < benchmark_min({min_repos})",
+                "action": "recommend_building_portfolio_projects",
+                "priority": "high",
+                "reason": f"'{benchmark_name}' benchmark profiles typically showcase at least {min_repos} public repositories; this GitHub profile has {repo_count}."
+            })
 
-    # --- Rule Group 4: Certification rules ---
+        if stale_count > 0 and active_count == 0 and repo_count > 0:
+            fired_rules.append({
+                "id": "R5-stale-codebases",
+                "condition": f"github_stale_repos={stale_count} AND active_recent=0",
+                "action": "recommend_refreshing_github_repos",
+                "priority": "high",
+                "reason": "Repository recency analysis indicates all public repositories are stale (>1-2 years without updates). Pushing fresh code or open-source commits will demonstrate active engagement."
+            })
+        elif activity_label == "inactive" and repo_count > 0:
+            fired_rules.append({
+                "id": "R5-activity",
+                "condition": f"github_activity_degree={activity_score} -> '{activity_label}'",
+                "action": "recommend_increasing_github_activity",
+                "priority": "medium",
+                "reason": "Recent GitHub activity is classified as 'inactive', which can weaken perceived engagement."
+            })
+
+        min_langs = benchmark.get("min_github_languages", 0)
+        langs = len(github_data.get("languages", []))
+        if langs < min_langs:
+            fired_rules.append({
+                "id": "R6-languages",
+                "condition": f"github_language_diversity({langs}) < benchmark_min({min_langs})",
+                "action": "recommend_diversifying_projects",
+                "priority": "low",
+                "reason": f"Benchmark identities typically demonstrate at least {min_langs} distinct programming languages; {langs} detected."
+            })
+
+    # Rule Group 4: Certifications
     if not profile.get("certifications") and benchmark.get("certifications"):
         fired_rules.append({
             "id": "R7-certifications",
             "condition": "no certifications detected AND benchmark defines relevant certifications",
             "action": "recommend_certification",
             "priority": "medium",
-            "reason": f"No certifications were detected. Relevant options for '{benchmark_name}' include: "
-                      f"{', '.join(benchmark.get('certifications', [])[:3])}."
+            "reason": f"No certifications detected. Relevant options for '{benchmark_name}' include: {', '.join(benchmark.get('certifications', [])[:3])}."
         })
 
-    # --- Rule Group 5: Profile completeness rules (fuzzy) ---
+    # Rule Group 5: Completeness Rules
+    source_states = profile.get("source_states", {})
     completeness_score, completeness_label = fuzzy_logic.completeness_degree(profile.get("completeness_flags", {}))
-    if not profile.get("completeness_flags", {}).get("github_provided"):
-        fired_rules.append({
-            "id": "R8-missing-github",
-            "condition": "github_provided=False",
-            "action": "recommend_adding_github",
-            "priority": "high",
-            "reason": "No GitHub profile was analysed. Technical benchmarks rely heavily on GitHub "
-                      "evidence of hands-on project work."
-        })
-    if not profile.get("completeness_flags", {}).get("linkedin_provided"):
+
+    if source_states.get("linkedin") == "not_supplied":
         fired_rules.append({
             "id": "R9-missing-linkedin",
-            "condition": "linkedin_provided=False",
+            "condition": "linkedin_state='not_supplied'",
             "action": "recommend_completing_linkedin",
             "priority": "medium",
-            "reason": "No usable LinkedIn profile text was provided or the profile appears too sparse "
-                      "to analyse, limiting network-facing visibility."
+            "reason": "No LinkedIn profile text was supplied, limiting visibility into professional networking and recommendations."
         })
 
-    # --- Rule Group 6: Visibility / privacy rules ---
+    # Rule Group 6: Granular Privacy & Visibility Controls
     visibility_findings = []
     contact_exposed = profile.get("public_contact_info_detected", False)
 
-    if visibility_level == "Privacy Focused" and contact_exposed:
-        fired_rules.append({
-            "id": "R10-privacy-contact",
-            "condition": "visibility='Privacy Focused' AND contact_info_detected=True",
-            "action": "recommend_reducing_public_contact_exposure",
-            "priority": "high",
-            "reason": "The user selected 'Privacy Focused' visibility, but contact information "
-                      "(email/phone-like patterns) was detected in publicly analysable text."
-        })
-        visibility_findings.append("Public contact information detected despite a Privacy Focused preference.")
+    if visibility_level == "Privacy Focused":
+        if contact_exposed:
+            fired_rules.append({
+                "id": "R10-privacy-contact",
+                "condition": "visibility='Privacy Focused' AND contact_info_detected=True",
+                "action": "recommend_reducing_public_contact_exposure",
+                "priority": "high",
+                "reason": "Direct contact identifiers (email/phone patterns) were detected in text while requesting a Privacy-Focused visibility mode."
+            })
+            visibility_findings.append("Direct contact info detected; personal identifiers have been flagged for redaction.")
+        else:
+            visibility_findings.append("Privacy-preserving mode active: external profile handles and contact details are masked.")
 
-    if visibility_level == "Fully Public" and completeness_label != "complete":
-        fired_rules.append({
-            "id": "R11-visibility-incomplete",
-            "condition": f"visibility='Fully Public' AND completeness='{completeness_label}'",
-            "action": "recommend_maximising_profile_completeness",
-            "priority": "medium",
-            "reason": "A 'Fully Public' visibility preference works best with a complete profile across "
-                      "all sources so recruiters see a consistent, strong identity."
-        })
-        visibility_findings.append("Profile is not yet fully complete despite a Fully Public visibility goal.")
+    elif visibility_level == "Semi-Public":
+        visibility_findings.append("Semi-Public mode active: technical competencies and project metrics are shared, with personal contact info protected.")
 
-    if visibility_level == "Semi-Public":
-        visibility_findings.append("Balanced visibility selected: recommendations favour showcasing "
-                                    "professional strengths while minimising personal contact exposure.")
+    elif visibility_level == "Fully Public":
+        if completeness_label != "complete":
+            fired_rules.append({
+                "id": "R11-visibility-incomplete",
+                "condition": f"visibility='Fully Public' AND completeness='{completeness_label}'",
+                "action": "recommend_maximising_profile_completeness",
+                "priority": "medium",
+                "reason": "A Fully Public goal works best when resume, GitHub, and LinkedIn are all populated to maximize visibility."
+            })
+            visibility_findings.append("Profile is not yet fully complete across all 3 channels despite a Fully Public visibility goal.")
+        else:
+            visibility_findings.append("Fully Public mode active: full portfolio and technical credentials are comprehensively showcased.")
 
     gap_analysis = {
         "missing_required_skills": missing_required,
         "missing_preferred_skills": missing_preferred,
         "matched_skills": matched_skills,
-        "skill_match_score": skill_score,
-        "skill_match_label": skill_label,
+        "claimed_skills": list(claimed_skills),
+        "uncertain_skills": list(uncertain_skills),
+        "planned_skills": list(planned_skills),
+        "negated_skills": list(negated_skills),
+        "multi_factor_score": multi_factor_score,
+        "skill_match_score": fuzzy_skill_score,
+        "skill_match_label": fuzzy_skill_label,
         "github_activity_score": activity_score,
         "github_activity_label": activity_label,
         "profile_completeness_score": completeness_score,

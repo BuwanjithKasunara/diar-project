@@ -1,6 +1,26 @@
-__pycache__/
-*.pyc
-*.db
+# Virtual Environment
 .venv/
 venv/
-node_modules/
+env/
+ENV/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# SQLite Database
+*.db
+*.sqlite3
+
+# ML Model Artifacts (trained on the fly)
+*.joblib
+*.pkl
+
+
+# OS & Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

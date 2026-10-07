@@ -5,31 +5,33 @@ Extracts structured professional attributes (skills, education,
 experience, certifications, projects) from unstructured text sources:
 resume PDFs, GitHub profile data, and pasted LinkedIn text.
 
-Technique: alias-aware, typo-tolerant keyword classification against a
-curated skills taxonomy, combined with lightweight regex heuristics
-for education, experience and certification detection. This acts as
-the "Neural Network / Text Classification Model" stage described in
-the project proposal: in this prototype it is implemented as a fast,
-fully explainable classifier (a dictionary-driven text classifier),
-which keeps the pipeline deployable offline (no model downloads, no
-heavy ML dependencies) while remaining a direct stand-in for a trained
-NER/classification model in a production build.
+Enhancements:
+1. Context-Aware Skill Categorization:
+   Distinguishes between:
+   - Claimed Skills: Verified or explicitly stated active hands-on experience.
+   - Planned Skills: Future learning intent (e.g. "plan to learn Docker").
+   - Negated Skills: Explicit lack of experience (e.g. "no experience with Java").
+   - Uncertain Skills: Beginner or low-confidence mentions (e.g. "basic familiarity with Kubernetes").
 
-Two matching passes are used:
-  1. Exact / alias matching - each canonical skill (e.g. "machine
-     learning") is matched against itself AND a curated list of
-     synonyms and abbreviations (e.g. "ml"), so phrasing differences
-     don't cause a miss.
-  2. Fuzzy single-word matching - remaining unmatched words in the
-     text are compared against single-word skill names using
-     difflib's sequence-matching ratio, catching minor typos
-     (e.g. "Dockr" -> "docker") without a full ML model.
+2. Frequency Normalization & Noise Suppression:
+   Uses sublinear term frequency scaling with saturation capping to eliminate
+   keyword stuffing and suppress weak, isolated noise.
+
+3. Explicit Data Source State Tracking:
+   Tracks source states: "not_supplied" | "partial" | "failed" | "analysed".
+
+4. GitHub Recency & Domain Relevance:
+   Calculates active commit recency (fresh vs moderate vs stale) and evaluates
+   repository domain relevance against target technical competencies.
 """
 import difflib
 import json
 import re
 import os
-from typing import Optional
+import math
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List, Tuple
+from collections import defaultdict, Counter
 import fitz  # PyMuPDF
 import requests
 
@@ -38,21 +40,14 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 with open(os.path.join(DATA_DIR, "skills_dictionary.json")) as f:
     SKILLS_DICT = json.load(f)
 
-# Flatten {category: {canonical: [aliases]}} into two lookup structures:
-#   ALIAS_TO_CANONICAL: every alias/canonical phrase -> its canonical skill name
-#   CANONICAL_SKILLS:   the full set of canonical skill names
+# Flatten {category: {canonical: [aliases]}} into lookup structures:
 ALIAS_TO_CANONICAL = {}
 for _category, _skills in SKILLS_DICT.items():
     for _canonical, _aliases in _skills.items():
         for _alias in _aliases:
             ALIAS_TO_CANONICAL[_alias.strip().lower()] = _canonical
 
-# Sorted longest-first so multi-word aliases are matched before shorter
-# substrings that might otherwise shadow them (e.g. "node.js" before "js").
 ALL_ALIAS_PATTERNS = sorted(ALIAS_TO_CANONICAL.keys(), key=len, reverse=True)
-
-# Single-word canonical skills / aliases are candidates for typo-tolerant
-# fuzzy matching (multi-word phrases are skipped to avoid false positives).
 SINGLE_WORD_ALIASES = {a: c for a, c in ALIAS_TO_CANONICAL.items() if " " not in a.strip() and len(a.strip()) > 2}
 
 CERT_KEYWORDS = ["certified", "certificate", "certification", "credential"]
@@ -62,33 +57,63 @@ EXPERIENCE_HEADER = re.compile(r"(work experience|professional experience|experi
 PROJECT_HEADER = re.compile(r"(projects|portfolio)", re.I)
 SKILLS_HEADER = re.compile(r"(technical skills|core competencies|skills)", re.I)
 
-FUZZY_MATCH_CUTOFF = 0.82  # similarity threshold (0-1); higher = stricter, fewer false positives.
-# Tuned empirically: catches common single-letter typos (e.g. "Pythom" -> python,
-# "Dockr" -> docker) while keeping unrelated English words (e.g. "must", "dust",
-# "gust" vs. "rust") below the threshold and therefore unmatched.
+FUZZY_MATCH_CUTOFF = 0.82
+
+# Contextual Regex Patterns for Negation, Future Plans, and Uncertainty
+NEGATION_PATTERN = re.compile(
+    r"\b(no|not|never|neither|without|lack(?:ing)?\s+of|haven't|have\s+not|hadn't|had\s+not|zero)\s+"
+    r"(?:prior\s+|any\s+|much\s+|hands-on\s+|practical\s+)?(?:experience\s+(?:with|in)|knowledge\s+of|familiarity\s+with|exposure\s+to|background\s+in|skills?\s+in)?",
+    re.I
+)
+DIRECT_NEGATION_PREFIX = re.compile(r"\b(no|not|without|never)\b", re.I)
+
+PLAN_PATTERN = re.compile(
+    r"\b(plan(?:ning|s)?\s+to|aim(?:ing|s)?\s+to|goal\s+is\s+to|interested\s+in|aspiring\s+to|"
+    r"want(?:ing|s)?\s+to|hoping\s+to|looking\s+to|currently\s+learning|in\s+progress\s+learning|"
+    r"will\s+learn|future\s+learning|eager\s+to\s+learn|seeking\s+to\s+learn)\b",
+    re.I
+)
+
+CONTRAST_PATTERN = re.compile(r"\b(but|however|except|although|yet|instead|whereas)\b", re.I)
+
+UNCERTAIN_PATTERN = re.compile(
+    r"\b(basic|fundamental|rudimentary|elementary|beginner|entry[\s-]level|novice|minimal|"
+    r"surface[\s-]level|limited|introductory)\s*(?:knowledge\s+of|understanding\s+of|familiarity\s+with|skills?\s+in|experience\s+with)?",
+    re.I
+)
+
+AFTER_UNCERTAIN_PATTERN = re.compile(
+    r"^\s*[\(\[]?\s*(?:basic|beginner|novice|elementary|learning|introductory|fundamentals?)\s*[\)\]]?",
+    re.I
+)
 
 
-def _find_skills(text: str, fuzzy: bool = True) -> list:
-    """Returns the set of canonical skill names detected in `text`."""
+def extract_contextual_skills(text: str, fuzzy: bool = True) -> Dict[str, Any]:
+    """
+    Categorizes skills into explicit contextual states:
+    - claimed: actively demonstrated / verified hands-on skills
+    - planned: future intent or in-progress learning
+    - negated: explicitly denied / ruled-out skills
+    - uncertain: low-confidence or beginner mentions
+    
+    Also computes frequency counts and sublinear normalized weights.
+    """
     text_lower = " " + re.sub(r"\s+", " ", text.lower()) + " "
-    found_canonical = set()
-    matched_spans = []
+    matched_spans: List[Tuple[int, int, str]] = []
 
-    # Pass 1: exact alias / synonym matching (word-boundary aware)
+    # Pass 1: exact alias matches
     for alias in ALL_ALIAS_PATTERNS:
         alias_clean = alias.strip()
         if not alias_clean:
             continue
         pattern = r"(?<![a-zA-Z0-9])" + re.escape(alias_clean) + r"(?![a-zA-Z0-9])"
-        match = re.search(pattern, text_lower)
-        if match:
-            found_canonical.add(ALIAS_TO_CANONICAL[alias])
-            matched_spans.append((match.start(), match.end()))
+        for m in re.finditer(pattern, text_lower):
+            matched_spans.append((m.start(), m.end(), ALIAS_TO_CANONICAL[alias]))
 
-    # Pass 2: typo-tolerant fuzzy matching on remaining single words only
+    # Pass 2: typo-tolerant fuzzy matches
     if fuzzy:
         already_covered = set()
-        for start, end in matched_spans:
+        for start, end, _ in matched_spans:
             already_covered.update(range(start, end))
 
         words = list(re.finditer(r"[a-zA-Z][a-zA-Z0-9+#./-]{2,}", text_lower))
@@ -96,16 +121,80 @@ def _find_skills(text: str, fuzzy: bool = True) -> list:
         for m in words:
             w_start, w_end = m.start(), m.end()
             if w_start in already_covered:
-                continue  # already matched exactly, skip
+                continue
             word = m.group().strip(".")
             if word in SINGLE_WORD_ALIASES:
-                found_canonical.add(SINGLE_WORD_ALIASES[word])
+                matched_spans.append((w_start, w_end, SINGLE_WORD_ALIASES[word]))
                 continue
             close = difflib.get_close_matches(word, candidate_pool, n=1, cutoff=FUZZY_MATCH_CUTOFF)
             if close:
-                found_canonical.add(SINGLE_WORD_ALIASES[close[0]])
+                matched_spans.append((w_start, w_end, SINGLE_WORD_ALIASES[close[0]]))
 
-    return sorted(found_canonical)
+    # Context analysis per occurrence
+    skill_mention_types = defaultdict(list)
+    freq = Counter()
+
+    for start, end, canonical_name in matched_spans:
+        freq[canonical_name] += 1
+        window_before = text_lower[max(0, start - 80):start]
+        clause_before = re.split(r"[.!?;:\n]", window_before)[-1].strip()
+        window_after = text_lower[end:min(len(text_lower), end + 30)]
+        clause_after = re.split(r"[.!?;:\n]", window_after)[0].strip()
+
+        neg_m = NEGATION_PATTERN.search(clause_before) or DIRECT_NEGATION_PREFIX.search(clause_before)
+        plan_m = PLAN_PATTERN.search(clause_before)
+        unc_m = UNCERTAIN_PATTERN.search(clause_before) or AFTER_UNCERTAIN_PATTERN.search(clause_after)
+
+        if neg_m and not CONTRAST_PATTERN.search(clause_before[neg_m.end():]):
+            m_type = "negated"
+        elif plan_m and not CONTRAST_PATTERN.search(clause_before[plan_m.end():]):
+            m_type = "planned"
+        elif unc_m:
+            m_type = "uncertain"
+        else:
+            m_type = "claimed"
+
+        skill_mention_types[canonical_name].append(m_type)
+
+    claimed_set = set()
+    planned_set = set()
+    negated_set = set()
+    uncertain_set = set()
+
+    for skill, types in skill_mention_types.items():
+        if "claimed" in types:
+            claimed_set.add(skill)
+        elif "uncertain" in types:
+            uncertain_set.add(skill)
+        elif "planned" in types:
+            planned_set.add(skill)
+        elif all(t == "negated" for t in types):
+            negated_set.add(skill)
+
+    # Sublinear frequency normalization: weight = 1.0 + ln(capped_count) * 0.4
+    # Eliminates artificial signal amplification from repeated keywords
+    normalized_weights = {}
+    for skill, count in freq.items():
+        capped = min(count, 5)
+        normalized_weights[skill] = round(1.0 + (math.log(capped) * 0.4), 3) if capped > 1 else 1.0
+
+    return {
+        "claimed": sorted(claimed_set),
+        "planned": sorted(planned_set),
+        "negated": sorted(negated_set),
+        "uncertain": sorted(uncertain_set),
+        "frequency": dict(freq),
+        "normalized_weights": normalized_weights,
+    }
+
+
+def _find_skills(text: str, fuzzy: bool = True) -> list:
+    """
+    Returns verified active skills (claimed + uncertain), excluding
+    explicitly negated skills or planned-only skills.
+    """
+    extracted = extract_contextual_skills(text, fuzzy=fuzzy)
+    return sorted(set(extracted["claimed"]) | set(extracted["uncertain"]))
 
 
 def _find_certifications(text: str) -> list:
@@ -137,33 +226,44 @@ def _extract_section(text: str, header_pattern: re.Pattern, max_chars: int = 150
 
 
 def extract_from_resume_text(raw_text: str) -> dict:
-    """Extracts structured attributes from raw resume text."""
-    skills = _find_skills(raw_text)
-    certifications = _find_certifications(raw_text)
-    education = _find_education(raw_text)
-    experience_section = _extract_section(raw_text, EXPERIENCE_HEADER)
-    projects_section = _extract_section(raw_text, PROJECT_HEADER)
+    """Extracts structured attributes from raw resume text with source state tracking."""
+    cleaned = (raw_text or "").strip()
+    if not cleaned:
+        source_state = "not_supplied"
+    elif len(cleaned) < 80:
+        source_state = "partial"
+    else:
+        source_state = "analysed"
 
-    # crude years-of-experience heuristic: count 4-digit year ranges e.g. 2019-2023
-    year_ranges = re.findall(r"(20\d{2}|19\d{2})\s*[-–—to]{1,4}\s*(20\d{2}|present|current)", raw_text, re.I)
+    contextual = extract_contextual_skills(cleaned)
+    certifications = _find_certifications(cleaned)
+    education = _find_education(cleaned)
+    experience_section = _extract_section(cleaned, EXPERIENCE_HEADER)
+    projects_section = _extract_section(cleaned, PROJECT_HEADER)
+
+    # Years-of-experience heuristic
+    year_ranges = re.findall(r"(20\d{2}|19\d{2})\s*[-–—to]{1,4}\s*(20\d{2}|present|current)", cleaned, re.I)
     years_experience = 0
+    current_year = datetime.now().year
     for start, end in year_ranges:
         try:
             start_y = int(start)
-            end_y = 2026 if not end.isdigit() else int(end)
+            end_y = current_year if not end.isdigit() else int(end)
             years_experience = max(years_experience, max(0, end_y - start_y))
         except ValueError:
             continue
 
     return {
         "source": "resume",
-        "skills": skills,
+        "source_state": source_state,
+        "skills": contextual["claimed"] + contextual["uncertain"],
+        "contextual_skills": contextual,
         "certifications": certifications,
         "education": education,
         "experience_snippet": experience_section,
         "projects_snippet": projects_section,
         "estimated_years_experience": years_experience,
-        "raw_text_length": len(raw_text),
+        "raw_text_length": len(cleaned),
     }
 
 
@@ -177,58 +277,137 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 
 def extract_from_github(username: str, github_token: Optional[str] = None) -> dict:
-    """Pulls public profile + repo data from the GitHub REST API and
-    classifies languages / activity / project descriptions."""
+    """
+    Pulls public profile + repo data from the GitHub REST API.
+    Evaluates repository recency (decay based on days elapsed) and domain relevance.
+    """
+    clean_user = (username or "").strip()
+    if not clean_user:
+        return {
+            "source": "github",
+            "source_state": "not_supplied",
+            "error": "No GitHub username supplied",
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "languages": [],
+            "repo_count": 0,
+            "recently_active_repo_count": 0,
+            "stale_repo_count": 0,
+            "profile_complete": False
+        }
+
     headers = {"Accept": "application/vnd.github+json"}
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
 
-    profile_url = f"https://api.github.com/users/{username}"
-    repos_url = f"https://api.github.com/users/{username}/repos?per_page=100&sort=updated"
+    profile_url = f"https://api.github.com/users/{clean_user}"
+    repos_url = f"https://api.github.com/users/{clean_user}/repos?per_page=100&sort=updated"
 
     try:
         profile_resp = requests.get(profile_url, headers=headers, timeout=10)
         repos_resp = requests.get(repos_url, headers=headers, timeout=10)
     except requests.RequestException as e:
-        return {"source": "github", "error": str(e), "skills": [], "languages": [],
-                 "repo_count": 0, "profile_complete": False}
+        return {
+            "source": "github",
+            "source_state": "failed",
+            "error": str(e),
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "languages": [],
+            "repo_count": 0,
+            "recently_active_repo_count": 0,
+            "profile_complete": False
+        }
 
     if profile_resp.status_code == 404:
-        return {"source": "github", "error": f"GitHub user '{username}' not found",
-                 "skills": [], "languages": [], "repo_count": 0, "profile_complete": False}
+        return {
+            "source": "github",
+            "source_state": "failed",
+            "error": f"GitHub user '{clean_user}' not found",
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "languages": [],
+            "repo_count": 0,
+            "recently_active_repo_count": 0,
+            "profile_complete": False
+        }
     if profile_resp.status_code in (403, 429):
-        return {"source": "github", "error": "GitHub API rate limit reached while fetching this profile; "
-                 "try again shortly or supply a GitHub token.",
-                 "skills": [], "languages": [], "repo_count": 0, "profile_complete": False}
+        return {
+            "source": "github",
+            "source_state": "failed",
+            "error": "GitHub API rate limit reached; supply a token or try again later.",
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "languages": [],
+            "repo_count": 0,
+            "recently_active_repo_count": 0,
+            "profile_complete": False
+        }
     if profile_resp.status_code != 200:
-        return {"source": "github", "error": f"GitHub API returned status {profile_resp.status_code} for '{username}'",
-                 "skills": [], "languages": [], "repo_count": 0, "profile_complete": False}
+        return {
+            "source": "github",
+            "source_state": "failed",
+            "error": f"GitHub API status {profile_resp.status_code} for '{clean_user}'",
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "languages": [],
+            "repo_count": 0,
+            "recently_active_repo_count": 0,
+            "profile_complete": False
+        }
 
     profile = profile_resp.json()
     repos = repos_resp.json() if repos_resp.status_code == 200 else []
 
-    languages = sorted({r.get("language") for r in repos if r.get("language")})
-    descriptions_text = " ".join([r.get("description") or "" for r in repos])
-    topic_text = " ".join([" ".join(r.get("topics", [])) for r in repos if isinstance(r.get("topics"), list)])
-    combined_text = f"{descriptions_text} {topic_text} {profile.get('bio') or ''}"
-    skills = _find_skills(combined_text)
-
     non_fork_repos = [r for r in repos if not r.get("fork")]
-    recently_updated = [r for r in non_fork_repos if r.get("updated_at", "") >= "2025-01-01"]
+
+    # Dynamic Recency Analysis (days elapsed rather than static year)
+    now = datetime.now(timezone.utc)
+    fresh_repos = []
+    moderate_repos = []
+    stale_repos = []
+
+    for r in non_fork_repos:
+        pushed = r.get("pushed_at") or r.get("updated_at")
+        if pushed:
+            try:
+                dt = datetime.fromisoformat(pushed.replace("Z", "+00:00"))
+                days_old = (now - dt).days
+                if days_old <= 365:
+                    fresh_repos.append(r)
+                elif days_old <= 730:
+                    moderate_repos.append(r)
+                else:
+                    stale_repos.append(r)
+            except Exception:
+                fresh_repos.append(r)
+        else:
+            fresh_repos.append(r)
+
+    languages = sorted({r.get("language") for r in non_fork_repos if r.get("language")})
+    descriptions_text = " ".join([r.get("description") or "" for r in non_fork_repos])
+    topic_text = " ".join([" ".join(r.get("topics", [])) for r in non_fork_repos if isinstance(r.get("topics"), list)])
+    combined_text = f"{descriptions_text} {topic_text} {profile.get('bio') or ''}"
+    contextual = extract_contextual_skills(combined_text)
 
     profile_complete = bool(profile.get("bio")) and bool(profile.get("name")) and len(non_fork_repos) > 0
+    source_state = "partial" if len(non_fork_repos) == 0 else "analysed"
 
     return {
         "source": "github",
-        "username": username,
+        "source_state": source_state,
+        "username": clean_user,
         "name": profile.get("name"),
         "bio": profile.get("bio"),
         "public_repos": profile.get("public_repos", 0),
         "followers": profile.get("followers", 0),
         "repo_count": len(non_fork_repos),
-        "recently_active_repo_count": len(recently_updated),
+        "recently_active_repo_count": len(fresh_repos),
+        "moderate_repo_count": len(moderate_repos),
+        "stale_repo_count": len(stale_repos),
         "languages": [l.lower() for l in languages],
-        "skills": skills,
+        "skills": contextual["claimed"] + contextual["uncertain"],
+        "contextual_skills": contextual,
         "top_repos": [
             {"name": r.get("name"), "description": r.get("description"), "language": r.get("language"),
              "stars": r.get("stargazers_count", 0)}
@@ -239,28 +418,38 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
 
 
 def extract_from_linkedin_text(raw_text: str) -> dict:
-    """LinkedIn does not offer a public scraping API; the prototype
-    accepts pasted profile text (headline / about / experience / skills
-    sections copied by the user) and classifies it the same way as a
-    resume."""
-    if not raw_text or not raw_text.strip():
-        return {"source": "linkedin", "skills": [], "certifications": [], "education": [],
-                 "profile_complete": False, "raw_text_length": 0}
+    """Extracts attributes from pasted LinkedIn profile text with source state tracking."""
+    cleaned = (raw_text or "").strip()
+    if not cleaned:
+        return {
+            "source": "linkedin",
+            "source_state": "not_supplied",
+            "headline": "",
+            "skills": [],
+            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
+            "certifications": [],
+            "education": [],
+            "profile_complete": False,
+            "raw_text_length": 0,
+        }
 
-    skills = _find_skills(raw_text)
-    certifications = _find_certifications(raw_text)
-    education = _find_education(raw_text)
-    headline_match = re.search(r"^(.*)$", raw_text.strip().split("\n")[0])
+    source_state = "partial" if len(cleaned) < 100 else "analysed"
+    contextual = extract_contextual_skills(cleaned)
+    certifications = _find_certifications(cleaned)
+    education = _find_education(cleaned)
+    headline_match = re.search(r"^(.*)$", cleaned.split("\n")[0])
     headline = headline_match.group(1) if headline_match else ""
 
-    profile_complete = len(raw_text.strip()) > 200 and len(skills) > 0
+    profile_complete = len(cleaned) > 200 and len(contextual["claimed"]) > 0
 
     return {
         "source": "linkedin",
+        "source_state": source_state,
         "headline": headline[:200],
-        "skills": skills,
+        "skills": contextual["claimed"] + contextual["uncertain"],
+        "contextual_skills": contextual,
         "certifications": certifications,
         "education": education,
         "profile_complete": profile_complete,
-        "raw_text_length": len(raw_text),
+        "raw_text_length": len(cleaned),
     }

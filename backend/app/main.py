@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from . import database
-from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai
+from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
@@ -59,6 +59,36 @@ def list_visibility_levels():
     return VISIBILITY_LEVELS
 
 
+def sanitize_profile_for_visibility(profile: dict, visibility_level: str) -> dict:
+    """Enforces dynamic privacy redactions based on selected visibility consent tier."""
+    import copy
+    import re
+    sanitized = copy.deepcopy(profile)
+    email_re = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+    phone_re = re.compile(r"(\+?\d[\d\-\s]{8,}\d)")
+
+    def mask_text(t: str) -> str:
+        if not t:
+            return ""
+        t = email_re.sub("[REDACTED_EMAIL]", t)
+        t = phone_re.sub("[REDACTED_PHONE]", t)
+        return t
+
+    if visibility_level in ("Privacy Focused", "Semi-Public"):
+        if "resume" in sanitized:
+            sanitized["resume"]["experience_snippet"] = mask_text(sanitized["resume"].get("experience_snippet", ""))
+            sanitized["resume"]["projects_snippet"] = mask_text(sanitized["resume"].get("projects_snippet", ""))
+        if "linkedin" in sanitized:
+            sanitized["linkedin"]["headline"] = mask_text(sanitized["linkedin"].get("headline", ""))
+
+    if visibility_level == "Privacy Focused":
+        if sanitized.get("github", {}).get("username"):
+            sanitized["github"]["username"] = "[ANONYMOUS_USER]"
+            sanitized["github"]["bio"] = mask_text(sanitized["github"].get("bio", ""))
+
+    return sanitized
+
+
 @app.post("/api/analyze")
 async def analyze(
     benchmark_identity: str = Form(...),
@@ -92,7 +122,16 @@ async def analyze(
     # 2. Identity Construction Module
     profile = identity_construction.build_digital_identity_profile(resume_data, github_data, linkedin_data)
 
-    # 3. Identity Benchmark Module (lookup) + 4. Digital Identity Alignment Engine
+    # 3. Machine Learning Role Classification
+    combined_ml_text = "\n".join(filter(None, [
+        resume_text,
+        linkedin_text,
+        f"Skills: {', '.join(profile.get('skills', []))}" if profile.get('skills') else "",
+        f"Projects: {', '.join(profile.get('projects', []))}" if profile.get('projects') else "",
+    ]))
+    ml_prediction = ml_classifier.predict_role(combined_ml_text, target_benchmark=benchmark_identity)
+
+    # 4. Identity Benchmark Module (lookup) + Digital Identity Alignment Engine
     benchmark = BENCHMARKS[benchmark_identity]
     alignment_result = alignment_engine.run_alignment(profile, benchmark, benchmark_identity, visibility_level)
 
@@ -103,6 +142,7 @@ async def analyze(
     explanation_summary = explainable_ai.build_explanation_summary(
         profile, benchmark_identity, alignment_result["gap_analysis"],
         alignment_result["visibility_assessment"], recommendations,
+        ml_prediction=ml_prediction,
     )
 
     benchmark_comparison = {
@@ -113,9 +153,12 @@ async def analyze(
         "missing_preferred_skills": alignment_result["gap_analysis"]["missing_preferred_skills"],
     }
 
+    sanitized_profile = sanitize_profile_for_visibility(profile, visibility_level)
+
     report_payload = {
-        "digital_identity_profile": profile,
+        "digital_identity_profile": sanitized_profile,
         "benchmark_comparison": benchmark_comparison,
+        "ml_prediction": ml_prediction,
         "gap_analysis": alignment_result["gap_analysis"],
         "visibility_assessment": alignment_result["visibility_assessment"],
         "recommendations": recommendations,
