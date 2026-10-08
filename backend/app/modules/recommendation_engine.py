@@ -14,12 +14,17 @@ PRIORITY_WEIGHT = {"high": 3, "medium": 2, "low": 1}
 
 ACTION_LABELS = {
     "recommend_learning": "Develop skill: {arg}",
+    "accelerate_learning": "Prioritise learning skill: {arg}",
+    "structured_training": "Complete structured training in: {arg}",
+    "continue_learning": "Continue learning skill: {arg}",
     "recommend_gaining_experience": "Gain additional relevant experience",
     "recommend_building_portfolio_projects": "Build additional portfolio projects on GitHub",
     "recommend_increasing_github_activity": "Increase GitHub activity / commit frequency",
     "recommend_diversifying_projects": "Diversify projects across more programming languages",
     "recommend_certification": "Pursue a relevant professional certification",
     "recommend_adding_github": "Add and populate a GitHub profile",
+    "provide_github_profile": "Provide a valid GitHub profile for analysis",
+    "recommend_refreshing_github_repos": "Refresh older GitHub repositories with relevant updates",
     "recommend_completing_linkedin": "Complete and expand LinkedIn profile content",
     "recommend_reducing_public_contact_exposure": "Reduce publicly exposed personal contact information",
     "recommend_maximising_profile_completeness": "Maximise profile completeness across all platforms",
@@ -27,11 +32,14 @@ ACTION_LABELS = {
 
 
 def _label_for(action: str) -> str:
-    if ":" in action:
-        key, arg = action.split(":", 1)
-        template = ACTION_LABELS.get(key, key)
+    key, separator, arg = action.partition(":")
+    template = ACTION_LABELS.get(key)
+    if template is not None:
         return template.format(arg=arg)
-    return ACTION_LABELS.get(action, action)
+
+    # Keep future actions readable, including their skill or other argument.
+    label = key.replace("_", " ").capitalize()
+    return f"{label}: {arg}" if separator else label
 
 
 def generate_recommendations(fired_rules: list) -> list:
