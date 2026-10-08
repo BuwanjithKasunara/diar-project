@@ -28,3 +28,4 @@ class AnalyzeResponse(BaseModel):
     visibility_assessment: Dict[str, Any]
     recommendations: List[Dict[str, Any]]
     explanation_summary: Dict[str, Any]
+    report_metadata: Optional[Dict[str, Any]] = None

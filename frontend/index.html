@@ -199,6 +199,11 @@ var state = {
   linkedinText: "",
   resumeFile: null,
   resumePubliclyShared: false,
+  reportRedaction: "mask_contacts",
+  confirmingDelete: false,
+  deletingReport: false,
+  deleteError: null,
+  reportNotice: null,
   loading: false,
   error: null,
   report: null,
@@ -281,6 +286,8 @@ function renderRecommendations(recs) {
     ]);
     var explain = el("div", { class: "rec-explain" }, [r.explanation]);
     var body = el("div", {}, [title, meta, explain]);
+    (r.suggested_steps || []).forEach(function (step) { body.appendChild(el("div", { class: "hint" }, [step])); });
+    if (r.evidence_ids && r.evidence_ids.length) body.appendChild(el("div", { class: "hint" }, ["Related evidence: " + r.evidence_ids.join(", ")]));
     wrap.appendChild(el("div", { class: "rec-item" }, [rank, body]));
   });
   return wrap;
@@ -374,6 +381,22 @@ function renderReport(report) {
   var ml = report.ml_prediction;
 
   var container = el("div", {}, []);
+  var metadata = report.report_metadata || {};
+  var protectionLabels = { mask_contacts: "Contacts masked", mask_contacts_and_handle: "Contacts and GitHub handle masked", none: "Extracted text retained" };
+  var savedContent = [h2("", "Saved report #" + report.id),
+    el("div", { class: "hint" }, [protectionLabels[metadata.report_redaction] || "Legacy saved report policy"]),
+    el("div", { class: "hint" }, ["Report protection affects DIAR's saved copy. Recommendations describe changes you can make on the source platforms."])
+  ];
+  if (metadata.legacy_policy) savedContent.push(el("div", { class: "hint" }, ["Legacy report: protection follows its original visibility setting."]));
+  if (state.confirmingDelete) {
+    savedContent.push(el("p", {}, ["Delete this saved report? This cannot be undone. External profiles and backups are unaffected."]));
+    var confirmButton = el("button", { type: "button", onClick: deleteSavedReport }, [state.deletingReport ? "Deleting…" : "Confirm deletion"]);
+    var keepButton = el("button", { type: "button", onClick: function () { state.confirmingDelete = false; state.deleteError = null; renderResultsPanel(); } }, ["Keep report"]);
+    confirmButton.disabled = keepButton.disabled = state.deletingReport;
+    savedContent.push(el("div", {}, [confirmButton, keepButton]));
+  } else savedContent.push(el("button", { type: "button", onClick: function () { state.confirmingDelete = true; renderResultsPanel(); } }, ["Delete saved report"]));
+  if (state.deleteError) savedContent.push(el("div", { class: "error-box", role: "alert" }, [state.deleteError]));
+  container.appendChild(panel(savedContent));
 
   // 01 Alignment scores
   var ghCard = ga.github_activity_label === "insufficient_evidence"
@@ -429,6 +452,26 @@ function renderReport(report) {
     });
   }
   container.appendChild(panel(visContent));
+  if (va.assessment_version === 2) {
+    var evidenceContent = [h2("", "Exposure evidence and coverage")];
+    (va.evidence || []).forEach(function (item) {
+      var provenance = { observed_public: "Observed in public GitHub metadata", supplied_text_unknown_audience: "Supplied text; audience unknown", user_declared_public: "Public copy declared by user" };
+      evidenceContent.push(el("div", { class: "visibility-note" }, [
+        el("strong", {}, [item.source + (item.repository_name ? " / " + item.repository_name : "") + " / " + item.location]),
+        el("div", {}, [provenance[item.exposure_status] || item.exposure_status]),
+        el("div", {}, [item.display_evidence]),
+        el("div", { class: "hint" }, ["Evidence: " + item.id + " · " + item.kind + " · " + item.detection_basis])
+      ]));
+    });
+    Object.keys(va.coverage || {}).forEach(function (source) {
+      var coverage = va.coverage[source];
+      evidenceContent.push(el("div", { class: "hint" }, [source + ": " + coverage.status +
+        (coverage.repositories_checked !== undefined ? " · " + coverage.repositories_checked + " repositories checked" : "") +
+        (coverage.checked_fields && (coverage.status === "checked" || coverage.status === "limited") ? " · Fields: " + coverage.checked_fields.join(", ") : "")]));
+    });
+    (va.limitations || []).forEach(function (text) { evidenceContent.push(el("div", { class: "hint" }, [text])); });
+    container.appendChild(panel(evidenceContent));
+  } else container.appendChild(panel([el("div", { class: "hint" }, ["Legacy visibility analysis; no version 2 exposure scan was recorded."])]));
 
   // 05 Explanation
   container.appendChild(panel([
@@ -491,8 +534,8 @@ function renderResultsPanel() {
   if (!state.report) {
     results.appendChild(el("div", { class: "empty" }, [
       el("div", { class: "glyph" }, ["◎"]),
-      el("h3", { class: "display" }, ["No report yet"]),
-      el("p", {}, ["Fill in at least a resume, GitHub username, or LinkedIn text on the left, choose a benchmark identity and visibility level, then run the analysis to generate an explainable Digital Identity Report."])
+      el("h3", { class: "display" }, [state.reportNotice ? "Saved report deleted" : "No report yet"]),
+      el("p", { role: "status" }, [state.reportNotice || "Fill in at least a resume, GitHub username, or LinkedIn text on the left, choose a benchmark identity and visibility level, then run the analysis to generate an explainable Digital Identity Report."])
     ]));
     return;
   }
@@ -524,7 +567,8 @@ function renderVisibilityOptions() {
   var row = document.getElementById("visibility-row");
   row.innerHTML = "";
   state.visibilityLevels.forEach(function (v) {
-    var opt = el("div", {
+    var opt = el("button", {
+      type: "button", "aria-pressed": state.visibility === v ? "true" : "false",
       class: "radio-opt" + (state.visibility === v ? " active" : ""),
       onClick: function () {
         state.visibility = v;
@@ -545,7 +589,7 @@ function renderError() {
 
 function renderRunButton() {
   var btn = document.getElementById("run-btn");
-  var canSubmit = state.benchmark && state.visibility && !state.loading;
+  var canSubmit = state.benchmark && state.visibility && !state.loading && !state.deletingReport;
   btn.disabled = !canSubmit;
   btn.textContent = state.loading ? "Analysing…" : "Run Digital Identity Analysis";
 }
@@ -593,6 +637,9 @@ async function runAnalysis(e) {
   state.loading = true;
   state.error = null;
   state.report = null;
+  state.confirmingDelete = false;
+  state.deleteError = null;
+  state.reportNotice = null;
   renderResultsPanel();
   renderError();
   renderRunButton();
@@ -605,6 +652,7 @@ async function runAnalysis(e) {
     form.append("linkedin_text", state.linkedinText || "");
     if (state.resumeFile) form.append("resume", state.resumeFile);
     form.append("resume_publicly_shared", state.resumePubliclyShared ? "true" : "false");
+    form.append("report_redaction", state.reportRedaction);
 
     var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form });
     if (!res.ok) {
@@ -622,6 +670,22 @@ async function runAnalysis(e) {
     renderError();
     renderRunButton();
   }
+}
+
+async function deleteSavedReport() {
+  if (!state.report || state.deletingReport) return;
+  var reportId = state.report.id;
+  state.deletingReport = true;
+  state.deleteError = null;
+  renderResultsPanel(); renderRunButton();
+  try {
+    var response = await fetch(API_BASE + "/api/reports/" + encodeURIComponent(reportId), { method: "DELETE" });
+    if (!response.ok && response.status !== 404) throw new Error("Could not delete the saved report. Try again.");
+    state.report = null;
+    state.confirmingDelete = false;
+    state.reportNotice = "Saved report #" + reportId + " was removed from DIAR's report history.";
+  } catch (error) { state.deleteError = error.message || "Could not delete the saved report. Try again."; }
+  finally { state.deletingReport = false; renderResultsPanel(); renderRunButton(); }
 }
 
 function buildLayout() {
@@ -679,6 +743,14 @@ function buildLayout() {
 
     el("label", {}, ["Desired Online Presence"]),
     el("div", { class: "radio-row", id: "visibility-row" }, []),
+    el("div", { class: "hint" }, ["Fully Public: intentional professional presence. Semi-Public: selected public work. Privacy Focused: reduce unnecessary exposure and share selected evidence directly."]),
+    el("label", { for: "report-protection" }, ["Saved report protection"]),
+    el("select", { id: "report-protection", onChange: function (e) { state.reportRedaction = e.target.value; } }, [
+      el("option", { value: "mask_contacts" }, ["Mask contacts (default)"]),
+      el("option", { value: "mask_contacts_and_handle" }, ["Mask contacts and GitHub handle"]),
+      el("option", { value: "none" }, ["Retain extracted text"])
+    ]),
+    el("div", { class: "hint" }, ["Masking options hide contact patterns throughout the saved report; handle masking also hides known GitHub references. Retain extracted text keeps those details. Exposure evidence is always masked; names and other identifying text may remain."]),
 
     el("button", { class: "run", type: "submit", id: "run-btn" }, ["Run Digital Identity Analysis"]),
 
