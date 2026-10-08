@@ -76,6 +76,10 @@
   label:first-of-type{margin-top:0;}
   label.resume-public-toggle{display:flex;align-items:center;gap:8px;margin:10px 0 0;color:var(--text);font-size:12px;cursor:pointer;}
   .resume-public-toggle input{width:auto;margin:0;accent-color:var(--beacon);}
+  .privacy-card{padding:14px;margin-top:10px;border:1px solid var(--line);border-left:3px solid var(--beacon);border-radius:8px;background:var(--panel-2);overflow-wrap:anywhere;}
+  .privacy-card p{font-size:13px;line-height:1.6;margin:8px 0;}
+  .privacy-links{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;}
+  .privacy-links a{color:var(--beacon);}
   input[type=text], input[type=file], textarea, select{
     width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
     border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:inherit;
@@ -286,6 +290,7 @@ function renderRecommendations(recs) {
     ]);
     var explain = el("div", { class: "rec-explain" }, [r.explanation]);
     var body = el("div", {}, [title, meta, explain]);
+    if (r.rule_id) body.id = "recommendation-" + r.rule_id;
     (r.suggested_steps || []).forEach(function (step) { body.appendChild(el("div", { class: "hint" }, [step])); });
     if (r.evidence_ids && r.evidence_ids.length) body.appendChild(el("div", { class: "hint" }, ["Related evidence: " + r.evidence_ids.join(", ")]));
     wrap.appendChild(el("div", { class: "rec-item" }, [rank, body]));
@@ -373,6 +378,61 @@ function renderMlPrediction(ml, targetBenchmark) {
   return panel(content);
 }
 
+function renderPrivacySummary(assessment, recommendations) {
+  var content = [h2("04", "Personal information to review — " + assessment.selected_level)];
+  if (assessment.assessment_version !== 2) {
+    (assessment.findings || []).forEach(function (text) { content.push(el("div", { class: "visibility-note" }, [text])); });
+    content.push(el("div", { class: "hint" }, ["Legacy visibility analysis; detailed exposure evidence was not recorded."]));
+    return panel(content);
+  }
+  var evidence = (assessment.evidence || []).filter(function (item) { return item.recommendation_eligible; });
+  var kinds = { email: "Email address", phone: "Phone number", street_address: "Street address", date_of_birth: "Date of birth" };
+  var sources = { github_profile: "GitHub profile", github_repository: "GitHub repository metadata", linkedin: "LinkedIn text", resume: "Public resume copy" };
+  var groups = {};
+  evidence.forEach(function (item) {
+    var key = item.source + ":" + item.kind;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  });
+  if (evidence.length) {
+    content.push(el("strong", {}, [evidence.length + (evidence.length === 1 ? " detail to review" : " details to review")]));
+    Object.keys(groups).forEach(function (key) {
+      var items = groups[key], item = items[0];
+      var label = kinds[item.kind] || "Personal detail";
+      if (item.kind === "phone" && items.every(function (entry) { return entry.detection_basis === "possible"; })) label = "Possible phone number";
+      var detailPhrase = (item.kind === "email" ? "an " : "a ") + label.toLowerCase();
+      var description, provenance;
+      if (item.source === "linkedin") {
+        description = "Your supplied LinkedIn text includes " + detailPhrase + ". Check who can see it on LinkedIn. If it is public and unnecessary, remove it or limit its audience.";
+        provenance = "Audience not verified";
+      } else if (item.source === "resume") {
+        description = "The resume you marked publicly available includes " + detailPhrase + ". Review the public copy and keep a suitable recruitment contact route.";
+        provenance = "Public copy declared by you; not independently verified";
+      } else {
+        var locations = Array.from(new Set(items.map(function (entry) { return entry.location; }))).join(", ");
+        description = "This detail appears in public GitHub " + (item.source === "github_profile" ? "profile fields" : "repository metadata") + " (" + locations + "). Review whether it needs to be public and remove unnecessary details.";
+        provenance = "Observed in public GitHub metadata";
+      }
+      var card = el("div", { class: "privacy-card" }, [
+        el("strong", {}, [label + " · " + (sources[item.source] || item.source) + (items.length > 1 ? " · " + items.length + " matches" : "")]),
+        el("p", {}, [description]), el("div", { class: "hint" }, [provenance + " · Values hidden in the evidence"])
+      ]);
+      var links = [el("a", { href: "#exposure-evidence" }, ["View evidence"])];
+      var recommendation = (recommendations || []).find(function (rec) { return (rec.evidence_ids || []).some(function (id) { return items.some(function (entry) { return entry.id === id; }); }); });
+      if (recommendation) links.push(el("a", { href: "#recommendation-" + recommendation.rule_id }, ["View recommended action"]));
+      card.appendChild(el("div", { class: "privacy-links" }, links));
+      content.push(card);
+    });
+  } else {
+    var coverage = assessment.coverage || {};
+    var checked = Object.keys(coverage).some(function (key) { return ["checked", "limited", "supplied_text_only", "user_declared_public"].indexOf(coverage[key].status) >= 0; });
+    content.push(el("strong", {}, [checked ? "No supported personal-information patterns found in the checked fields" : "Online exposure could not be assessed"]));
+    content.push(el("p", { class: "hint" }, [checked ? "This result covers the inspected fields and supported patterns. It does not confirm that your whole account is private." : "Supply public profile information or LinkedIn text if you want those sources reviewed."]));
+  }
+  (assessment.findings || []).filter(function (text) { return !text.startsWith("Found ") && !text.startsWith("No supported exposure patterns matched") && !text.startsWith("Public profile exposure was not assessed"); }).forEach(function (text) { content.push(el("div", { class: "hint" }, [text])); });
+  return panel(content);
+}
+
 function renderReport(report) {
   var p = report.digital_identity_profile;
   var bc = report.benchmark_comparison;
@@ -443,15 +503,7 @@ function renderReport(report) {
   container.appendChild(renderMlPrediction(ml, bc.benchmark_identity));
 
   // 04 Visibility
-  var visContent = [h2("04", "Visibility Assessment — " + va.selected_level)];
-  if (!va.findings || va.findings.length === 0) {
-    visContent.push(el("div", { class: "hint" }, ["No visibility-related issues detected for this preference."]));
-  } else {
-    va.findings.forEach(function (f) {
-      visContent.push(el("div", { class: "visibility-note" }, [f]));
-    });
-  }
-  container.appendChild(panel(visContent));
+  container.appendChild(renderPrivacySummary(va, report.recommendations));
   if (va.assessment_version === 2) {
     var evidenceContent = [h2("", "Exposure evidence and coverage")];
     (va.evidence || []).forEach(function (item) {
@@ -470,7 +522,9 @@ function renderReport(report) {
         (coverage.checked_fields && (coverage.status === "checked" || coverage.status === "limited") ? " · Fields: " + coverage.checked_fields.join(", ") : "")]));
     });
     (va.limitations || []).forEach(function (text) { evidenceContent.push(el("div", { class: "hint" }, [text])); });
-    container.appendChild(panel(evidenceContent));
+    var evidencePanel = panel(evidenceContent);
+    evidencePanel.id = "exposure-evidence";
+    container.appendChild(evidencePanel);
   } else container.appendChild(panel([el("div", { class: "hint" }, ["Legacy visibility analysis; no version 2 exposure scan was recorded."])]));
 
   // 05 Explanation

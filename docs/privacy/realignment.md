@@ -87,6 +87,9 @@ The old profile-sanitizer wrapper remains for compatibility.
 
 The frontend displays source fields, masked excerpts, provenance, source coverage and
 limits. The goal controls support keyboard input; saved protection has its own selector.
+The summary now groups personal details into source/type cards with plain-language advice,
+audience/provenance notices and links to evidence and recommendations. Empty inspected data
+and unavailable sources have different summary states; legacy findings retain their fallback.
 Deletion removes a selected DIAR row through a 204/404 API, with confirmation, cancellation,
 retryable error and success presentation. External profiles and backups are unaffected.
 The local prototype still has no authentication or ownership checks; masking is not access
