@@ -126,6 +126,12 @@ then visit http://localhost:5173
 | `/api/reports` | GET | Report history (stored in SQLite) |
 | `/api/reports/{id}` | GET | Retrieve a past report |
 
+## Development documentation
+
+See [project documentation](docs/README.md), including the privacy requirement
+realignment record and staged implementation plan. The evidence foundation is Part 1;
+source-specific recommendations and independent report controls are planned follow-ups.
+
 ## Extending
 
 - Add a benchmark identity: edit `backend/app/data/benchmarks.json`.
