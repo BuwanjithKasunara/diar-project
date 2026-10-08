@@ -50,7 +50,12 @@ def build_digital_identity_profile(resume: dict, github: dict, linkedin: dict) -
     all_certifications = list({*resume.get("certifications", []), *linkedin.get("certifications", [])})
     all_education = list({*resume.get("education", []), *linkedin.get("education", [])})
 
-    years_experience = resume.get("estimated_years_experience", 0)
+    known_experience = [data["experience_evidence"] for data in (resume, linkedin)
+                        if data.get("experience_evidence", {}).get("status") == "estimated"]
+    experience = max(known_experience, key=lambda item: item["years"]) if known_experience else {"years": None, "status": "unknown", "basis": None}
+    if not known_experience and "experience_evidence" not in resume and resume.get("estimated_years_experience", 0) > 0:
+        experience = {"years": resume["estimated_years_experience"], "status": "estimated", "basis": "legacy_estimate"}
+    years_experience = experience["years"] if experience["years"] is not None else 0
 
     # 2. Explicit Data Source State Tracking
     r_state = resume.get("source_state", "not_supplied" if resume.get("raw_text_length", 0) == 0 else "analysed")
@@ -70,7 +75,8 @@ def build_digital_identity_profile(resume: dict, github: dict, linkedin: dict) -
     }
 
     valid_sources_count = sum(1 for s in source_states.values() if s == "analysed")
-    has_insufficient_evidence = valid_sources_count == 0
+    skill_evidence_available = bool(claimed_skills | uncertain_skills | planned_skills | negated_skills)
+    has_insufficient_evidence = not (skill_evidence_available or known_experience or all_certifications or all_education)
 
     profile = {
         "skills": sorted(active_skills),
@@ -85,6 +91,8 @@ def build_digital_identity_profile(resume: dict, github: dict, linkedin: dict) -
         "certifications": all_certifications,
         "education": all_education,
         "estimated_years_experience": years_experience,
+        "experience_evidence": dict(experience),
+        "skill_evidence_status": "observed" if skill_evidence_available else "insufficient_evidence",
         "source_states": source_states,
         "insufficient_evidence": has_insufficient_evidence,
         "github": {

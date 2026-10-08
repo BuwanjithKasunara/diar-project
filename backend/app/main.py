@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Response
@@ -14,6 +15,8 @@ with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
     BENCHMARKS = json.load(f)
 
 VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
+MAX_RESUME_BYTES = 5 * 1024 * 1024
+MAX_LINKEDIN_CHARACTERS = 100_000
 
 app = FastAPI(
     title="AI-Based Digital Identity Analysis and Recommendation System",
@@ -106,13 +109,26 @@ async def analyze(
         raise HTTPException(status_code=400, detail=f"Unknown visibility level '{visibility_level}'.")
     if report_redaction not in privacy.REPORT_POLICIES:
         raise HTTPException(status_code=400, detail="Unknown saved report protection policy.")
+    github_username = (github_username or "").strip() or None
+    linkedin_text = (linkedin_text or "").strip()
+    if github_username and ("--" in github_username or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", github_username)):
+        raise HTTPException(status_code=400, detail="Enter a GitHub username (up to 39 letters, digits or internal hyphens), not a profile URL.")
+    if len(linkedin_text) > MAX_LINKEDIN_CHARACTERS:
+        raise HTTPException(status_code=413, detail="LinkedIn text must contain at most 100,000 characters.")
+    if resume is None and not github_username and not linkedin_text:
+        raise HTTPException(status_code=400, detail="Supply a resume, GitHub username or LinkedIn text before running analysis.")
 
     # 1. Information Extraction Module
     resume_text = ""
     if resume is not None:
-        file_bytes = await resume.read()
+        file_bytes = await resume.read(MAX_RESUME_BYTES + 1)
+        await resume.close()
+        if len(file_bytes) > MAX_RESUME_BYTES:
+            raise HTTPException(status_code=413, detail="The resume PDF must be no larger than 5 MiB.")
         try:
             resume_text = extraction.extract_text_from_pdf(file_bytes)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         except Exception:
             raise HTTPException(status_code=400, detail="Could not read the uploaded resume as a PDF.")
     resume_data = extraction.extract_from_resume_text(resume_text)
@@ -125,6 +141,8 @@ async def analyze(
 
     # 2. Identity Construction Module
     profile = identity_construction.build_digital_identity_profile(resume_data, github_data, linkedin_data)
+    if not resume_text and not linkedin_text and github_data.get("source_state") == "failed":
+        raise HTTPException(status_code=422, detail="GitHub could not be retrieved and no other source was supplied. Check the username, retry later or supply another source.")
     privacy_evidence = privacy_assessment.collect_privacy_evidence(
         resume_text, linkedin_text or "", github_data.get("privacy_data"),
         resume_publicly_shared=resume_publicly_shared,

@@ -464,9 +464,9 @@ function renderReport(report) {
     : scoreCard("GitHub Activity", ga.github_activity_label, ga.github_activity_score);
 
   var scoreRow = el("div", { class: "score-row" }, [
-    scoreCard("Multi-Factor Alignment", Math.round((ga.multi_factor_score || 0) * 100) + "%", ga.multi_factor_score),
-    scoreCard("Fuzzy Skill Match", ga.skill_match_label, ga.skill_match_score),
-    scoreCard("Profile Completeness", ga.profile_completeness_label, ga.profile_completeness_score),
+    scoreCard("Multi-Factor Alignment", ga.skill_evidence_status === "insufficient_evidence" ? "Insufficient evidence" : Math.round((ga.multi_factor_score || 0) * 100) + "%", ga.skill_evidence_status === "insufficient_evidence" ? null : ga.multi_factor_score),
+    scoreCard("Fuzzy Skill Match", ga.skill_evidence_status === "insufficient_evidence" ? "Insufficient evidence" : ga.skill_match_label, ga.skill_evidence_status === "insufficient_evidence" ? null : ga.skill_match_score),
+    scoreCard("Supplied Source Coverage", ga.profile_completeness_label, ga.profile_completeness_score),
     ghCard
   ]);
   container.appendChild(panel([h2("01", "Digital Identity Alignment"), scoreRow]));
@@ -482,7 +482,7 @@ function renderReport(report) {
     h2("02", "Benchmark Comparison — " + bc.benchmark_identity),
     el("p", { class: "hint", style: "margin-bottom:14px;" }, [bc.benchmark_description]),
     subhead("Matched Active Skills"), chips(bc.matched_skills, "match"),
-    subhead("Missing Required Skills"), chips(bc.missing_required_skills, "gap")
+    subhead("Required Skills Not Detected"), ga.skill_evidence_status === "insufficient_evidence" ? el("p", { class: "hint" }, ["Insufficient skill evidence; no skill-gap judgement was made."]) : chips(bc.missing_required_skills, "gap")
   ];
 
   if (ga.planned_skills && ga.planned_skills.length > 0) {
@@ -494,8 +494,8 @@ function renderReport(report) {
     bmItems.push(chips(ga.negated_skills, "warn"));
   }
 
-  bmItems.push(subhead("Missing Preferred Skills"));
-  bmItems.push(chips(bc.missing_preferred_skills, "gap"));
+  bmItems.push(subhead("Preferred Skills Not Detected"));
+  if (ga.skill_evidence_status !== "insufficient_evidence") bmItems.push(chips(bc.missing_preferred_skills, "gap"));
 
   container.appendChild(panel(bmItems));
 
@@ -688,6 +688,15 @@ async function loadVisibilityLevels() {
 
 async function runAnalysis(e) {
   e.preventDefault();
+  var username = state.githubUsername.trim();
+  var validationError = !state.resumeFile && !username && !state.linkedinText.trim()
+    ? "Supply a resume, GitHub username or LinkedIn text before running analysis."
+    : username && (username.indexOf("--") >= 0 || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(username))
+    ? "Enter a GitHub username, not a profile URL."
+    : state.resumeFile && state.resumeFile.size > 5 * 1024 * 1024
+    ? "The resume PDF must be no larger than 5 MiB."
+    : state.linkedinText.length > 100000 ? "LinkedIn text must contain at most 100,000 characters." : null;
+  if (validationError) { state.error = validationError; renderError(); return; }
   state.loading = true;
   state.error = null;
   state.report = null;
@@ -765,28 +774,28 @@ function buildLayout() {
   var form = el("form", { class: "panel", id: "analyze-form" }, [
     el("h2", {}, ["Input Sources"]),
 
-    el("label", {}, ["Resume (PDF)"]),
+    el("label", { for: "resume-input" }, ["Resume (PDF)"]),
     el("input", {
-      type: "file", accept: "application/pdf",
+      id: "resume-input", type: "file", accept: "application/pdf",
       onChange: function (e) { state.resumeFile = e.target.files[0] || null; }
     }, []),
-    el("div", { class: "hint" }, ["Extracted via the Information Extraction Module (NLP text classification)."]),
+    el("div", { class: "hint" }, ["Text-based PDF, up to 5 MiB and 30 pages. Scanned images and password-protected files are not supported."]),
     el("label", { class: "resume-public-toggle" }, [
       el("input", { type: "checkbox", onChange: function (e) { state.resumePubliclyShared = e.target.checked; } }, []),
       el("span", {}, ["This resume is also publicly available online"])
     ]),
     el("div", { class: "hint" }, ["Leave unchecked for a resume submitted privately for job applications."]),
 
-    el("label", {}, ["GitHub Username"]),
+    el("label", { for: "github-input" }, ["GitHub Username"]),
     el("input", {
-      type: "text", placeholder: "e.g. octocat",
+      id: "github-input", type: "text", placeholder: "e.g. octocat", maxlength: "39",
       onInput: function (e) { state.githubUsername = e.target.value; }
     }, []),
     el("div", { class: "hint" }, ["Pulled live from the public GitHub API — repos, languages, activity."]),
 
-    el("label", {}, ["LinkedIn Profile Text"]),
+    el("label", { for: "linkedin-input" }, ["LinkedIn Profile Text"]),
     el("textarea", {
-      placeholder: "Paste your headline, about section, skills, and experience…",
+      id: "linkedin-input", maxlength: "100000", placeholder: "Paste your headline, about section, skills, and experience…",
       onInput: function (e) { state.linkedinText = e.target.value; }
     }, []),
     el("div", { class: "hint" }, ["LinkedIn has no public scraping API — paste the relevant sections."]),

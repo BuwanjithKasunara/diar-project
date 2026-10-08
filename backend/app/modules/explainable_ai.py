@@ -22,9 +22,16 @@ def build_explanation_summary(profile: dict, benchmark_name: str, gap_analysis: 
         f"{len(gap_analysis['matched_skills'])} matched skill(s) and "
         f"{len(gap_analysis['missing_required_skills'])} missing required skill(s).",
 
-        f"Profile completeness across resume, GitHub, and LinkedIn is classified as '{completeness_label}' "
-        f"(score {gap_analysis['profile_completeness_score']}).",
+        f"Supplied source coverage is classified as '{completeness_label}' "
+        f"(score {gap_analysis['profile_completeness_score']}); actual account completeness was not verified.",
     ]
+
+    if gap_analysis.get("skill_evidence_status") == "insufficient_evidence":
+        narrative_parts[0] = "There is insufficient supported skill evidence to assess career alignment. Skill-gap advice is withheld; supply relevant professional information if you want a career assessment."
+    else:
+        narrative_parts[0] += " Undetected skills are gaps in the supplied evidence, not proof that you lack them."
+    if gap_analysis.get("experience_evidence_status") == "unknown":
+        narrative_parts.append("Work experience could not be estimated from supported evidence; missing information was not treated as zero years.")
 
     if activity_label == "insufficient_evidence":
         coverage = profile.get("github", {}).get("repository_coverage")
