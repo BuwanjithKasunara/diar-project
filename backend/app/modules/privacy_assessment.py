@@ -208,7 +208,9 @@ def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=Non
     resume_status = "user_declared_public" if resume_publicly_shared else "application_document"
     if resume_publicly_shared:
         collector.add(resume_text, "resume", "supplied_text", resume_status, "resume")
+    before_linkedin = collector.findings_count
     collector.add(linkedin_text, "linkedin", "supplied_text", "supplied_text_unknown_audience", "linkedin")
+    linkedin_findings_count = collector.findings_count - before_linkedin
     github = github_privacy_data if github_privacy_data is not None else collect_github_privacy_data()
     remaining = MAX_FINDINGS - len(collector.evidence)
     collector.evidence.extend(copy.deepcopy(github["evidence"][:remaining]))
@@ -217,7 +219,8 @@ def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=Non
     coverage.update({
         "resume": {"status": resume_status if resume_supplied else "not_supplied",
                    "public_exposure_reviewed": bool(resume_publicly_shared and resume_supplied)},
-        "linkedin": {"status": "supplied_text_only" if linkedin_supplied else "not_supplied", "audience_verified": False},
+        "linkedin": {"status": "supplied_text_only" if linkedin_supplied else "not_supplied",
+                     "audience_verified": False, "findings_count": linkedin_findings_count},
     })
     return collector.result(coverage, [*github["limitations"],
         "LinkedIn review covers supplied text only; its audience and account settings were not verified.",
@@ -327,17 +330,20 @@ def assess_visibility(privacy_evidence, visibility_level):
         findings.append("Resume contact details were treated as job-application information, not public exposure.")
     linkedin_coverage = coverage.get("linkedin", {})
     if linkedin_coverage.get("status") == "supplied_text_only":
-        if not any(item.get("source") == "linkedin" for item in eligible):
+        displayed_linkedin = any(item.get("source") == "linkedin" for item in eligible)
+        detected_linkedin = linkedin_coverage.get("findings_count")
+        if detected_linkedin == 0 or (detected_linkedin is None and not displayed_linkedin
+                                     and not privacy_evidence.get("omitted_findings_count", 0)):
             findings.append("No supported exposure patterns were found in the LinkedIn text supplied. Its audience and account settings were not verified.")
-        elif not any(key[0] == "linkedin" for key in grouped):
-            findings.append("LinkedIn exposure candidates were not eligible for an action; its audience and account settings were not verified.")
+        elif not displayed_linkedin:
+            findings.append("LinkedIn findings may be omitted by the report limit; no source-specific action is shown without its evidence. Its audience and account settings were not verified.")
     github_profile = coverage.get("github_profile", {}).get("status")
     github_repositories = coverage.get("github_repositories", {}).get("status")
     if github_profile not in ("checked",) or github_repositories not in ("checked",):
         limitations = []
         if github_profile not in ("checked",):
             limitations.append("GitHub profile fields were not checked")
-        if github_repositories != "checked":
+        if github_repositories not in ("checked", "limited"):
             limitations.append("GitHub repository metadata was not checked")
         if limitations:
             findings.append("Coverage: " + "; ".join(limitations) + ".")

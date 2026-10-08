@@ -141,6 +141,37 @@ def test_private_application_resume_does_not_consume_findings_cap():
     assert result["evidence"][0]["source"] == "github_profile"
 
 
+def test_omitted_linkedin_match_does_not_produce_false_no_match_statement():
+    resume = " ".join(f"person{index}@example.com" for index in range(50))
+    evidence = privacy.collect_privacy_evidence(resume, "Phone: 0771234567", resume_publicly_shared=True)
+    result = privacy.assess_visibility(evidence, "Privacy Focused")
+    assert evidence["coverage"]["linkedin"]["findings_count"] == 1
+    assert evidence["omitted_findings_count"] == 1
+    assert not any(item["source"] == "linkedin" for item in evidence["evidence"])
+    assert not any("No supported exposure patterns were found in the LinkedIn" in text for text in result["findings"])
+    assert any("LinkedIn findings may be omitted" in text for text in result["findings"])
+
+
+def test_limited_repository_coverage_is_described_without_contradiction():
+    github = privacy.collect_github_privacy_data(profile={}, repositories=[],
+        repository_state="partial", repository_coverage="limited")
+    result = privacy.assess_visibility(privacy.collect_privacy_evidence("", "", github), "Privacy Focused")
+    assert any("only fetched GitHub repository metadata was checked" in text for text in result["findings"])
+    assert not any("GitHub repository metadata was not checked" in text for text in result["findings"])
+
+
+@pytest.mark.parametrize("goal", ["Fully Public", "Semi-Public", "Privacy Focused"])
+def test_missing_linkedin_requests_optional_input_without_inferred_profile_gap(goal):
+    from app.modules import alignment_engine, recommendation_engine
+    profile = {"skills": [], "github": {}, "source_states": {"linkedin": "not_supplied"},
+               "completeness_flags": {}, "certifications": []}
+    result = alignment_engine.run_alignment(profile, {}, "Fixture", goal)
+    rule = next(item for item in result["fired_rules"] if item["id"] == "R9-missing-linkedin")
+    assert rule["action"] == ("skip_linkedin_analysis" if goal == "Privacy Focused" else "provide_linkedin_for_analysis")
+    recommendation = recommendation_engine.generate_recommendations([rule])[0]
+    assert "Complete and expand" not in recommendation["recommendation"]
+
+
 def test_visibility_rules_are_source_specific_and_values_stay_masked():
     github = privacy.collect_github_privacy_data(
         profile={"bio": "Email: public@example.com"},

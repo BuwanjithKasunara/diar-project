@@ -242,9 +242,7 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
     completeness_score, completeness_label = fuzzy_logic.completeness_degree(profile.get("completeness_flags", {}))
 
     if source_states.get("linkedin") == "not_supplied":
-        linkedin_action = "recommend_completing_linkedin" if visibility_level == "Fully Public" else (
-            "skip_linkedin_analysis" if visibility_level == "Privacy Focused" else "provide_linkedin_for_analysis"
-        )
+        linkedin_action = "skip_linkedin_analysis" if visibility_level == "Privacy Focused" else "provide_linkedin_for_analysis"
         fired_rules.append({
             "id": "R9-missing-linkedin",
             "condition": "linkedin_state='not_supplied'",

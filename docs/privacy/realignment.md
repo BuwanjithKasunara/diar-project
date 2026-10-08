@@ -128,9 +128,13 @@ Fully Public retains its public-presence portfolio advice. Semi-Public advice se
 projects to show. Privacy Focused permits private project development, selected direct
 sharing, and skipping optional source analysis; it does not require more public output. The
 three goals share the same career gap/completeness/activity scores and ML prediction inputs.
-These distinctions are covered by isolated API regression tests using synthetic documents,
-mocked GitHub responses and temporary SQLite databases. The complete Part 2 test result is
-recorded in its PR after execution.
+These distinctions are covered by collector/alignment/recommendation regression tests using
+synthetic text and mocked GitHub responses. Existing API tests use temporary SQLite databases.
+The review corrections retain a LinkedIn detection count even when evidence is capped,
+describe limited GitHub coverage without contradictory missing-coverage wording, and request
+existing LinkedIn text instead of inferring that a Fully Public user's profile needs expansion.
+The full suite passed 105 tests after the review corrections outside the Windows sandbox; the earlier
+startup/PDF explanation for sandbox test hangs was not established.
 
 ## Verification and prevention of recurrence
 
