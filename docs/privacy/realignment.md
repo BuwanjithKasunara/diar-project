@@ -56,6 +56,16 @@ An email is a review candidate, not proof that it is a personal address or a vul
 
 ## Delivery and status
 
+### Planned extension after the original realignment
+
+The [incremental improvements plan](../improvements/implementation-plan.md) adds
+improvement 9: optional, bounded privacy scanning of current public README and
+allowlisted text files. This extension is planned, not implemented. The original
+metadata-only scope and its verification remain the historical baseline. The new
+stage requires a separate decision record, masked file/line evidence, explicit
+coverage and network limits, and verification that career analysis remains independent.
+It precedes the report-history and recommendation-navigation UI improvements.
+
 | Part | Author | Branch | Status |
 |---|---|---|---|
 | 1: Evidence foundation and development record | sda2003 | feat/privacy-evidence-foundation | Merged into main |

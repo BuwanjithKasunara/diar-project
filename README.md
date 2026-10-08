@@ -64,6 +64,24 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 
 ## Setup & Running
 
+### Input and evidence limits
+
+Supply at least one resume PDF, GitHub username or nonempty LinkedIn text.
+Use a username rather than a GitHub URL. Resume PDFs must have readable text,
+contain at most 30 pages and be no larger than 5 MiB; password-protected/scanned
+PDFs are not supported. Extracted PDF text and LinkedIn input each have a
+100,000-character limit. Invalid uploads must be corrected or removed before retrying.
+If GitHub fails and no other input is available, DIAR does not save an empty report.
+
+Skill gaps describe information not detected in supplied evidence. Without supported
+skill mentions, alignment judgements and skill-gap advice are withheld. Privacy
+findings can still appear for short contact-containing text. Unknown experience is
+not treated as zero years in recommendations; estimates use explicit totals or
+year ranges in labelled experience sections and exclude education dates.
+Source coverage describes the supplied inputs, not verified account completeness.
+See the [improvement plan](docs/improvements/implementation-plan.md) and delivery
+records in [the documentation index](docs/README.md) for scope and verification.
+
 ### Backend (.venv Environment Setup)
 
 We recommend using a Python virtual environment (`.venv`) to isolate dependencies:

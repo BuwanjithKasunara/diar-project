@@ -33,6 +33,7 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
     norm_weights = ctx.get("normalized_weights", {})
 
     active_user_skills = claimed_skills | uncertain_skills
+    skill_evidence_available = profile.get("skill_evidence_status") != "insufficient_evidence"
 
     required_skills = set(benchmark.get("required_skills", []))
     preferred_skills = set(benchmark.get("preferred_skills", []))
@@ -77,7 +78,7 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
     )
 
     # 3. Context-Aware Rule Group 1: Skill Gap Rules
-    for skill in missing_required:
+    for skill in missing_required if skill_evidence_available else []:
         if skill in planned_skills:
             fired_rules.append({
                 "id": f"R1-planned-{skill}",
@@ -100,10 +101,10 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
                 "condition": f"benchmark='{benchmark_name}' AND required skill '{skill}' not detected",
                 "action": f"recommend_learning:{skill}",
                 "priority": "high",
-                "reason": f"'{skill}' is a required skill for '{benchmark_name}' and was not found in the user's data."
+                "reason": f"'{skill}' is required for '{benchmark_name}' but was not detected in the supplied information. If you already have this skill, add relevant evidence; otherwise consider learning it."
             })
 
-    for skill in missing_preferred:
+    for skill in missing_preferred if skill_evidence_available else []:
         if skill in planned_skills:
             fired_rules.append({
                 "id": f"R2-planned-{skill}",
@@ -118,13 +119,14 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
                 "condition": f"benchmark='{benchmark_name}' AND preferred skill '{skill}' not detected",
                 "action": f"recommend_learning:{skill}",
                 "priority": "medium",
-                "reason": f"'{skill}' is a preferred (non-mandatory) skill for '{benchmark_name}' that would strengthen the profile if added."
+                "reason": f"'{skill}' is preferred for '{benchmark_name}' but was not detected in the supplied information. Add evidence if you have it, or consider developing it."
             })
 
     # Rule Group 2: Experience rules
     min_years = benchmark.get("min_experience_years", 0)
     years = profile.get("estimated_years_experience", 0)
-    if years < min_years:
+    experience_known = profile.get("experience_evidence", {}).get("status", "estimated") != "unknown"
+    if experience_known and years < min_years:
         fired_rules.append({
             "id": "R3-experience",
             "condition": f"estimated_experience({years}y) < benchmark_min({min_years}y)",
@@ -228,7 +230,7 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
             })
 
     # Rule Group 4: Certifications
-    if not profile.get("certifications") and benchmark.get("certifications"):
+    if not profile.get("insufficient_evidence") and not profile.get("certifications") and benchmark.get("certifications"):
         fired_rules.append({
             "id": "R7-certifications",
             "condition": "no certifications detected AND benchmark defines relevant certifications",
@@ -263,11 +265,11 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
                 "condition": f"visibility='Fully Public' AND completeness='{completeness_label}'",
                 "action": "recommend_maximising_profile_completeness",
                 "priority": "medium",
-                "reason": "A Fully Public goal works best when resume, GitHub, and LinkedIn are all populated to maximize visibility."
+                "reason": "Only some source information was supplied. Add relevant evidence from your chosen sources if you want a broader assessment; actual account completeness was not verified."
             })
-            visibility_assessment["findings"].append("Profile is not yet fully complete across all 3 channels despite a Fully Public visibility goal.")
+            visibility_assessment["findings"].append("Source coverage is incomplete; actual account completeness was not verified.")
         else:
-            visibility_assessment["findings"].append("Fully Public mode active: full portfolio and technical credentials are comprehensively showcased.")
+            visibility_assessment["findings"].append("All three source types were supplied for this assessment; actual account completeness was not verified.")
 
     gap_analysis = {
         "missing_required_skills": missing_required,
@@ -278,6 +280,8 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
         "planned_skills": list(planned_skills),
         "negated_skills": list(negated_skills),
         "multi_factor_score": multi_factor_score,
+        "skill_evidence_status": "observed" if skill_evidence_available else "insufficient_evidence",
+        "experience_evidence_status": "estimated" if experience_known else "unknown",
         "skill_match_score": fuzzy_skill_score,
         "skill_match_label": fuzzy_skill_label,
         "github_activity_score": activity_score,

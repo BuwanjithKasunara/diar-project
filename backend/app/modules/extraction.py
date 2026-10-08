@@ -59,6 +59,7 @@ PROJECT_HEADER = re.compile(r"(projects|portfolio)", re.I)
 SKILLS_HEADER = re.compile(r"(technical skills|core competencies|skills)", re.I)
 
 FUZZY_MATCH_CUTOFF = 0.82
+MAX_PDF_PAGES = 30
 
 # Contextual Regex Patterns for Negation, Future Plans, and Uncertainty
 NEGATION_PATTERN = re.compile(
@@ -99,7 +100,7 @@ def extract_contextual_skills(text: str, fuzzy: bool = True) -> Dict[str, Any]:
     
     Also computes frequency counts and sublinear normalized weights.
     """
-    text_lower = " " + re.sub(r"\s+", " ", text.lower()) + " "
+    text_lower = " " + re.sub(r"[^\S\n]+", " ", text.lower()) + " "
     matched_spans: List[Tuple[int, int, str]] = []
 
     # Pass 1: exact alias matches
@@ -109,7 +110,9 @@ def extract_contextual_skills(text: str, fuzzy: bool = True) -> Dict[str, Any]:
             continue
         pattern = r"(?<![a-zA-Z0-9])" + re.escape(alias_clean) + r"(?![a-zA-Z0-9])"
         for m in re.finditer(pattern, text_lower):
-            matched_spans.append((m.start(), m.end(), ALIAS_TO_CANONICAL[alias]))
+            # Longest aliases win; one occurrence must not count as two skills.
+            if not any(m.start() < end and m.end() > start for start, end, _ in matched_spans):
+                matched_spans.append((m.start(), m.end(), ALIAS_TO_CANONICAL[alias]))
 
     # Pass 2: typo-tolerant fuzzy matches
     if fuzzy:
@@ -124,6 +127,9 @@ def extract_contextual_skills(text: str, fuzzy: bool = True) -> Dict[str, Any]:
             if w_start in already_covered:
                 continue
             word = m.group().strip(".")
+            # Ordinary learning/context words are not misspelled skill names.
+            if word in {"learn", "learning", "plan", "planning", "experience", "knowledge", "basic", "beginner"}:
+                continue
             if word in SINGLE_WORD_ALIASES:
                 matched_spans.append((w_start, w_end, SINGLE_WORD_ALIASES[word]))
                 continue
@@ -226,6 +232,35 @@ def _extract_section(text: str, header_pattern: re.Pattern, max_chars: int = 150
     return text[start:start + max_chars].strip()
 
 
+def _experience_evidence(text: str) -> dict:
+    """Conservative estimate: explicit totals or dates inside an experience section."""
+    explicit = re.search(r"\b(\d{1,2})\+?\s+years?(?:\s+of)?\s+(?:(?:professional|work|relevant|hands-on)\s+)?experience\b", text, re.I)
+    if explicit:
+        return {"years": int(explicit.group(1)), "status": "estimated", "basis": "explicit_total"}
+    header = re.search(r"^\s*(?:work experience|professional experience|employment history|experience)\s*:?\s*$", text, re.I | re.M)
+    if not header:
+        return {"years": None, "status": "unknown", "basis": None}
+    section = text[header.end():]
+    boundary = re.search(r"^\s*(?:education|projects|skills|technical skills|certifications|qualifications|volunteering)\s*:?\s*$", section, re.I | re.M)
+    if boundary:
+        section = section[:boundary.start()]
+    intervals = []
+    current_year = datetime.now(timezone.utc).year
+    for start, end in re.findall(r"\b(19\d{2}|20\d{2})\s*(?:[-–—]|to)\s*(19\d{2}|20\d{2}|present|current)\b", section, re.I):
+        first, last = int(start), current_year if not end.isdigit() else int(end)
+        if 1900 <= first <= last <= current_year:
+            intervals.append((first, last))
+    if not intervals:
+        return {"years": None, "status": "unknown", "basis": None}
+    merged = []
+    for first, last in sorted(intervals):
+        if merged and first <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], last)
+        else:
+            merged.append([first, last])
+    return {"years": sum(last - first for first, last in merged), "status": "estimated", "basis": "experience_section_year_ranges"}
+
+
 def extract_from_resume_text(raw_text: str) -> dict:
     """Extracts structured attributes from raw resume text with source state tracking."""
     cleaned = (raw_text or "").strip()
@@ -242,17 +277,7 @@ def extract_from_resume_text(raw_text: str) -> dict:
     experience_section = _extract_section(cleaned, EXPERIENCE_HEADER)
     projects_section = _extract_section(cleaned, PROJECT_HEADER)
 
-    # Years-of-experience heuristic
-    year_ranges = re.findall(r"(20\d{2}|19\d{2})\s*[-–—to]{1,4}\s*(20\d{2}|present|current)", cleaned, re.I)
-    years_experience = 0
-    current_year = datetime.now().year
-    for start, end in year_ranges:
-        try:
-            start_y = int(start)
-            end_y = current_year if not end.isdigit() else int(end)
-            years_experience = max(years_experience, max(0, end_y - start_y))
-        except ValueError:
-            continue
+    experience = _experience_evidence(cleaned)
 
     return {
         "source": "resume",
@@ -263,18 +288,24 @@ def extract_from_resume_text(raw_text: str) -> dict:
         "education": education,
         "experience_snippet": experience_section,
         "projects_snippet": projects_section,
-        "estimated_years_experience": years_experience,
+        "estimated_years_experience": experience["years"] if experience["years"] is not None else 0,
+        "experience_evidence": experience,
         "raw_text_length": len(cleaned),
     }
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    doc.close()
-    return text
+    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+        if doc.needs_pass:
+            raise ValueError("The resume PDF is password protected. Upload an unlocked copy.")
+        if len(doc) > MAX_PDF_PAGES:
+            raise ValueError(f"The resume PDF must contain at most {MAX_PDF_PAGES} pages.")
+        text = "\n".join(page.get_text() for page in doc)
+        if len(text) > 100_000:
+            raise ValueError("The resume PDF contains too much text (maximum 100,000 characters).")
+        if not text.strip():
+            raise ValueError("The PDF has no readable text. Upload a text-based PDF; scanned images are not supported.")
+        return text
 
 
 GITHUB_REPOSITORY_LIMIT = 100
@@ -480,4 +511,5 @@ def extract_from_linkedin_text(raw_text: str) -> dict:
         "education": education,
         "profile_complete": profile_complete,
         "raw_text_length": len(cleaned),
+        "experience_evidence": _experience_evidence(cleaned),
     }
