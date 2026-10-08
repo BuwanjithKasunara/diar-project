@@ -68,6 +68,10 @@ def build_explanation_summary(profile: dict, benchmark_name: str, gap_analysis: 
             f"Regarding the selected '{visibility_assessment['selected_level']}' visibility preference: "
             + " ".join(visibility_assessment["findings"])
         )
+    if visibility_assessment.get("assessment_version") == 2:
+        narrative_parts.append(
+            "Privacy review covers only the source fields listed in its coverage; it is separate from career completeness scores, and a successful metadata check does not verify every account setting or file."
+        )
 
     top_reasons = [r["explanation"] for r in recommendations[:3]]
 

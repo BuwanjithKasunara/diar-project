@@ -58,14 +58,20 @@ An email is a review candidate, not proof that it is a personal address or a vul
 
 | Part | Author | Branch | Status |
 |---|---|---|---|
-| 1: Evidence foundation and development record | sda2003 | feat/privacy-evidence-foundation | Prepared for review; not committed/merged by the agent |
-| 2: Visibility rules and source-specific advice | raveesha2002 | feat/privacy-recommendations | Planned; starts after Part 1 merges |
+| 1: Evidence foundation and development record | sda2003 | feat/privacy-evidence-foundation | Merged into main |
+| 2: Visibility rules and source-specific advice | raveesha2002 | feat/privacy-recommendations | Implemented on branch; ready for review |
 | 3: Independent report controls, interface and final docs | charya19 | fix/privacy-report-controls | Planned; starts after Part 2 merges |
 
-Part 1 adds an internal evidence collector and uses the existing GitHub responses to scan
-metadata. Its new findings are not yet connected to the analysis endpoint's report,
-recommendation rules or interface. The existing user-facing privacy behavior remains until
-the following parts are implemented. It should not be advertised as a completed privacy correction.
+Part 1's evidence collector uses existing GitHub responses to scan metadata. Part 2 connects
+masked evidence and scan coverage to the analysis report and rule-derived recommendations.
+The optional `resume_publicly_shared` form field defaults to false; ordinary job-application
+resume text is not scanned for public-exposure recommendations. LinkedIn paste findings are
+conditional because the supplied text does not establish account audience or settings.
+Part 2 also adapts portfolio and source-completeness advice to the selected online-presence
+goal while preserving career scoring and the ML classifier inputs/model.
+
+The report's existing masking policy is still a separate concern. Part 3 will address
+independent saved-report controls and finish the documentation/interface updates.
 
 Before starting Part 1, the previous uncommitted improvement 3 files were copied outside
 the repo and preserved in a named Git stash. The backup is local recovery material, not
@@ -104,8 +110,31 @@ coverage is labelled limited; failed and not-supplied sources are distinct.
 README files, source files, commit history, issues, private repositories and account
 visibility settings are not inspected. A successful metadata scan is not a complete
 account review. Supplied LinkedIn text is scanned in full by the collector, without
-fetching a profile or verifying its audience. Resume text is similarly available to the
-collector but defaults to `application_document` and is ineligible for exposure advice.
+fetching a profile or verifying its audience. Resume text defaults to `application_document`
+and is omitted from public-exposure candidate collection unless the user checks the
+public-copy declaration. That declaration is not verified by DIAR; it changes the evidence
+provenance and permits conditional advice about that supplied copy only.
+
+## Part 2 behavior and verification
+
+The API returns the versioned `visibility_assessment` with masked evidence, source coverage,
+limitations, and rules. Rules point to evidence IDs and carry source, category, and suggested
+steps into the existing prioritized recommendations. GitHub rules identify public profile
+fields or repository metadata. LinkedIn recommendations say to check the actual audience
+before restricting a field. Report explanations state that privacy coverage is separate from
+career completeness and does not establish full account coverage.
+
+Fully Public retains its public-presence portfolio advice. Semi-Public advice selects which
+projects to show. Privacy Focused permits private project development, selected direct
+sharing, and skipping optional source analysis; it does not require more public output. The
+three goals share the same career gap/completeness/activity scores and ML prediction inputs.
+These distinctions are covered by collector/alignment/recommendation regression tests using
+synthetic text and mocked GitHub responses. Existing API tests use temporary SQLite databases.
+The review corrections retain a LinkedIn detection count even when evidence is capped,
+describe limited GitHub coverage without contradictory missing-coverage wording, and request
+existing LinkedIn text instead of inferring that a Fully Public user's profile needs expansion.
+The full suite passed 105 tests after the review corrections outside the Windows sandbox; the earlier
+startup/PDF explanation for sandbox test hangs was not established.
 
 ## Verification and prevention of recurrence
 

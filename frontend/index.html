@@ -74,6 +74,8 @@
 
   label{display:block;font-size:12.5px;color:var(--text-dim);margin:16px 0 6px;}
   label:first-of-type{margin-top:0;}
+  label.resume-public-toggle{display:flex;align-items:center;gap:8px;margin:10px 0 0;color:var(--text);font-size:12px;cursor:pointer;}
+  .resume-public-toggle input{width:auto;margin:0;accent-color:var(--beacon);}
   input[type=text], input[type=file], textarea, select{
     width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
     border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:inherit;
@@ -196,6 +198,7 @@ var state = {
   githubUsername: "",
   linkedinText: "",
   resumeFile: null,
+  resumePubliclyShared: false,
   loading: false,
   error: null,
   report: null,
@@ -601,6 +604,7 @@ async function runAnalysis(e) {
     if (state.githubUsername.trim()) form.append("github_username", state.githubUsername.trim());
     form.append("linkedin_text", state.linkedinText || "");
     if (state.resumeFile) form.append("resume", state.resumeFile);
+    form.append("resume_publicly_shared", state.resumePubliclyShared ? "true" : "false");
 
     var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form });
     if (!res.ok) {
@@ -649,6 +653,11 @@ function buildLayout() {
       onChange: function (e) { state.resumeFile = e.target.files[0] || null; }
     }, []),
     el("div", { class: "hint" }, ["Extracted via the Information Extraction Module (NLP text classification)."]),
+    el("label", { class: "resume-public-toggle" }, [
+      el("input", { type: "checkbox", onChange: function (e) { state.resumePubliclyShared = e.target.checked; } }, []),
+      el("span", {}, ["This resume is also publicly available online"])
+    ]),
+    el("div", { class: "hint" }, ["Leave unchecked for a resume submitted privately for job applications."]),
 
     el("label", {}, ["GitHub Username"]),
     el("input", {
@@ -668,7 +677,7 @@ function buildLayout() {
     el("select", { id: "benchmark-select", onChange: function (e) { state.benchmark = e.target.value; renderBenchmarkOptions(); } }, []),
     el("div", { class: "hint", id: "benchmark-desc" }, []),
 
-    el("label", {}, ["Preferred Visibility Level"]),
+    el("label", {}, ["Desired Online Presence"]),
     el("div", { class: "radio-row", id: "visibility-row" }, []),
 
     el("button", { class: "run", type: "submit", id: "run-btn" }, ["Run Digital Identity Analysis"]),

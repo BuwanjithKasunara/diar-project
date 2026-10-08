@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 import requests
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -119,8 +118,7 @@ def test_aggregate_provenance_and_limits_preserve_input_data():
     before = copy.deepcopy(github)
     result = privacy.collect_privacy_evidence("Email: applicant@example.com", "Headline\n" + "x" * 200 + "\nPhone: 0771234567", github)
     findings = {item["source"]: item for item in result["evidence"]}
-    assert findings["resume"]["exposure_status"] == "application_document"
-    assert findings["resume"]["recommendation_eligible"] is False
+    assert "resume" not in findings
     assert findings["linkedin"]["exposure_status"] == "supplied_text_unknown_audience"
     assert findings["linkedin"]["recommendation_eligible"] is True
     assert result["coverage"]["linkedin"]["audience_verified"] is False
@@ -133,6 +131,69 @@ def test_aggregate_provenance_and_limits_preserve_input_data():
     assert declared["evidence"][0]["recommendation_eligible"] is True
 
 
+def test_private_application_resume_does_not_consume_findings_cap():
+    resume = " ".join(f"person{index}@example.com" for index in range(60))
+    github = privacy.collect_github_privacy_data(profile={"email": "candidate@example.com"})
+    result = privacy.collect_privacy_evidence(resume, "", github)
+    assert result["coverage"]["resume"]["status"] == "application_document"
+    assert result["coverage"]["resume"]["public_exposure_reviewed"] is False
+    assert len(result["evidence"]) == 1
+    assert result["evidence"][0]["source"] == "github_profile"
+
+
+def test_omitted_linkedin_match_does_not_produce_false_no_match_statement():
+    resume = " ".join(f"person{index}@example.com" for index in range(50))
+    evidence = privacy.collect_privacy_evidence(resume, "Phone: 0771234567", resume_publicly_shared=True)
+    result = privacy.assess_visibility(evidence, "Privacy Focused")
+    assert evidence["coverage"]["linkedin"]["findings_count"] == 1
+    assert evidence["omitted_findings_count"] == 1
+    assert not any(item["source"] == "linkedin" for item in evidence["evidence"])
+    assert not any("No supported exposure patterns were found in the LinkedIn" in text for text in result["findings"])
+    assert any("LinkedIn findings may be omitted" in text for text in result["findings"])
+
+
+def test_limited_repository_coverage_is_described_without_contradiction():
+    github = privacy.collect_github_privacy_data(profile={}, repositories=[],
+        repository_state="partial", repository_coverage="limited")
+    result = privacy.assess_visibility(privacy.collect_privacy_evidence("", "", github), "Privacy Focused")
+    assert any("only fetched GitHub repository metadata was checked" in text for text in result["findings"])
+    assert not any("GitHub repository metadata was not checked" in text for text in result["findings"])
+
+
+@pytest.mark.parametrize("goal", ["Fully Public", "Semi-Public", "Privacy Focused"])
+def test_missing_linkedin_requests_optional_input_without_inferred_profile_gap(goal):
+    from app.modules import alignment_engine, recommendation_engine
+    profile = {"skills": [], "github": {}, "source_states": {"linkedin": "not_supplied"},
+               "completeness_flags": {}, "certifications": []}
+    result = alignment_engine.run_alignment(profile, {}, "Fixture", goal)
+    rule = next(item for item in result["fired_rules"] if item["id"] == "R9-missing-linkedin")
+    assert rule["action"] == ("skip_linkedin_analysis" if goal == "Privacy Focused" else "provide_linkedin_for_analysis")
+    recommendation = recommendation_engine.generate_recommendations([rule])[0]
+    assert "Complete and expand" not in recommendation["recommendation"]
+
+
+def test_visibility_rules_are_source_specific_and_values_stay_masked():
+    github = privacy.collect_github_privacy_data(
+        profile={"bio": "Email: public@example.com"},
+        repositories=[{"name": "demo", "description": "Phone: +94 77 123 4567"}],
+        repository_state="analysed", repository_coverage="complete",
+    )
+    collected = privacy.collect_privacy_evidence(
+        "Email: job@example.com", "Phone: 0771234567", github,
+        resume_publicly_shared=True,
+    )
+    result = privacy.assess_visibility(collected, "Privacy Focused")
+    assert {(rule["source"], rule["action"].split(":")[-1]) for rule in result["rules"]} == {
+        ("github_profile", "email"), ("github_repository", "phone"),
+        ("linkedin", "phone"), ("resume", "email"),
+    }
+    rendered = json.dumps(result)
+    for raw in ("public@example.com", "0771234567", "job@example.com", "+94 77 123 4567"):
+        assert raw not in rendered
+    assert all(rule["evidence_ids"] and rule["suggested_steps"] for rule in result["rules"])
+    assert "audience" in next(rule["reason"] for rule in result["rules"] if rule["source"] == "linkedin")
+
+
 def test_empty_sources_have_missing_coverage_not_a_clean_bill_of_health():
     result = privacy.collect_privacy_evidence("", "")
     assert result["evidence"] == []
@@ -141,6 +202,45 @@ def test_empty_sources_have_missing_coverage_not_a_clean_bill_of_health():
     assert result["coverage"]["github_profile"]["status"] == "not_supplied"
     assert result["coverage"]["github_repositories"]["status"] == "not_supplied"
     assert result["limitations"]
+
+
+def test_assessment_and_recommendation_path_preserves_career_scores_across_goals():
+    from app.modules import alignment_engine
+
+    profile = {
+        "skills": ["python"], "contextual_skills": {"claimed": ["python"]},
+        "github": {"state": "analysed", "repository_state": "analysed", "repo_count": 1,
+                   "languages": ["Python"], "recently_active_repo_count": 1, "stale_repo_count": 0},
+        "source_states": {"resume": "not_supplied", "github": "analysed", "linkedin": "not_supplied"},
+        "completeness_flags": {"resume_provided": False, "github_provided": True, "linkedin_provided": False},
+        "certifications": [], "estimated_years_experience": 0,
+    }
+    benchmark = {"required_skills": ["python"], "preferred_skills": [], "min_github_repos": 3,
+                 "min_github_languages": 2, "certifications": []}
+    runs = [alignment_engine.run_alignment(profile, benchmark, "Fixture", goal) for goal in
+            ("Fully Public", "Semi-Public", "Privacy Focused")]
+    assert runs[0]["gap_analysis"] == runs[1]["gap_analysis"] == runs[2]["gap_analysis"]
+    assert runs[0]["visibility_assessment"]["findings"] != runs[2]["visibility_assessment"]["findings"]
+    assert next(rule["action"] for rule in runs[0]["fired_rules"] if rule["id"] == "R4-repo-count") == "recommend_building_portfolio_projects"
+    assert next(rule["action"] for rule in runs[2]["fired_rules"] if rule["id"] == "R4-repo-count") == "recommend_private_portfolio_projects"
+
+
+def test_alignment_exposure_rule_carries_recommendation_provenance():
+    from app.modules import alignment_engine, recommendation_engine
+
+    evidence = privacy.collect_privacy_evidence(
+        "", "Phone: 0771234567", privacy.collect_github_privacy_data(),
+    )
+    profile = {"skills": [], "contextual_skills": {}, "github": {}, "source_states": {"linkedin": "analysed"},
+               "completeness_flags": {}, "certifications": []}
+    result = alignment_engine.run_alignment(profile, {"required_skills": [], "preferred_skills": []},
+                                            "Fixture", "Semi-Public", privacy_evidence=evidence)
+    recommendations = recommendation_engine.generate_recommendations(result["fired_rules"])
+    recommendation = next(item for item in recommendations if item.get("source") == "linkedin")
+    assert recommendation["category"] == "visibility"
+    linkedin_rule = next(rule for rule in result["visibility_assessment"]["rules"] if rule["source"] == "linkedin")
+    assert recommendation["evidence_ids"] == linkedin_rule["evidence_ids"]
+    assert "LinkedIn text" in recommendation["recommendation"]
 
 
 def _response(status=200, data=None, limited=False):
@@ -234,28 +334,11 @@ def test_evidence_collection_does_not_change_career_extraction(monkeypatch):
     assert {key: value for key, value in with_evidence.items() if key != "privacy_data"} == {key: value for key, value in without_evidence.items() if key != "privacy_data"}
 
 
-def test_foundation_is_not_exposed_or_persisted_by_analysis_api(tmp_path, monkeypatch):
-    engine = create_engine(f"sqlite:///{tmp_path / 'reports.db'}", connect_args={"check_same_thread": False})
-    database.Base.metadata.create_all(engine)
-    sessions = sessionmaker(bind=engine)
-
-    def test_db():
-        with sessions() as session:
-            yield session
-
-    app.dependency_overrides[database.get_db] = test_db
-    _mock_github(monkeypatch, profile={"name": "Fixture", "bio": "Python developer person@example.com", "public_repos": 0})
-    try:
-        with TestClient(app) as client:
-            response = client.post("/api/analyze", data={"benchmark_identity": "AI Engineer", "visibility_level": "Fully Public", "github_username": "fixture"})
-            assert response.status_code == 200
-            assert "privacy_data" not in response.text
-            assert "privacy_evidence" not in response.text
-            assert "assessment_version" not in response.text
-            with sessions() as session:
-                row = session.get(database.Report, response.json()["id"])
-                assert "privacy_data" not in row.report_json
-                assert "privacy_evidence" not in row.report_json
-    finally:
-        app.dependency_overrides.pop(database.get_db, None)
-        engine.dispose()
+def test_declared_public_resume_generates_masked_source_specific_recommendation():
+    evidence = privacy.collect_privacy_evidence(
+        "Email: public-resume@example.com", "", resume_publicly_shared=True,
+    )
+    assessment = privacy.assess_visibility(evidence, "Privacy Focused")
+    assert assessment["coverage"]["resume"]["status"] == "user_declared_public"
+    assert any(rule["source"] == "resume" for rule in assessment["rules"])
+    assert "public-resume@example.com" not in json.dumps(assessment)

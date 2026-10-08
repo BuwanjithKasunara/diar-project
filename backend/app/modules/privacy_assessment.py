@@ -1,4 +1,4 @@
-"""Collect masked exposure evidence; recommendation rules are added in Part 2.
+"""Collect masked exposure evidence and turn it into visibility findings/rules.
 
 This module does not change source text, career extraction, or report policies.
 Pattern matches identify review candidates, not proof that information is unsafe.
@@ -198,26 +198,162 @@ def collect_github_privacy_data(profile=None, repositories=None, profile_state="
 def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=None, resume_publicly_shared=False):
     """Combine full supplied texts with already masked GitHub evidence.
 
-    This is a Part 1 foundation API, not yet wired into /api/analyze. A resume
-    defaults to an application document; a LinkedIn paste has unknown audience.
+    A resume defaults to an application document and is not treated as a public
+    exposure candidate unless the user declares it public. A LinkedIn paste has
+    unknown audience, so its recommendations remain conditional.
     """
     collector = _EvidenceCollector()
     resume_supplied = isinstance(resume_text, str) and bool(resume_text.strip())
     linkedin_supplied = isinstance(linkedin_text, str) and bool(linkedin_text.strip())
     resume_status = "user_declared_public" if resume_publicly_shared else "application_document"
-    collector.add(resume_text, "resume", "supplied_text", resume_status, "resume")
+    if resume_publicly_shared:
+        collector.add(resume_text, "resume", "supplied_text", resume_status, "resume")
+    before_linkedin = collector.findings_count
     collector.add(linkedin_text, "linkedin", "supplied_text", "supplied_text_unknown_audience", "linkedin")
+    linkedin_findings_count = collector.findings_count - before_linkedin
     github = github_privacy_data if github_privacy_data is not None else collect_github_privacy_data()
     remaining = MAX_FINDINGS - len(collector.evidence)
     collector.evidence.extend(copy.deepcopy(github["evidence"][:remaining]))
     collector.findings_count += github["findings_count"]
     coverage = copy.deepcopy(github["coverage"])
     coverage.update({
-        "resume": {"status": resume_status if resume_supplied else "not_supplied"},
-        "linkedin": {"status": "supplied_text_only" if linkedin_supplied else "not_supplied", "audience_verified": False},
+        "resume": {"status": resume_status if resume_supplied else "not_supplied",
+                   "public_exposure_reviewed": bool(resume_publicly_shared and resume_supplied)},
+        "linkedin": {"status": "supplied_text_only" if linkedin_supplied else "not_supplied",
+                     "audience_verified": False, "findings_count": linkedin_findings_count},
     })
     return collector.result(coverage, [*github["limitations"],
         "LinkedIn review covers supplied text only; its audience and account settings were not verified.",
         "A resume is application information unless the user declares that it is publicly shared.",
         "Address and birth-date detection supports only explicit labels or a structured street-location field; unusual formats can be missed.",
     ])
+
+
+SOURCE_LABELS = {
+    "github_profile": "GitHub profile",
+    "github_repository": "GitHub repository metadata",
+    "linkedin": "LinkedIn text you supplied",
+    "resume": "resume you marked publicly shared",
+}
+KIND_LABELS = {
+    "email": "email address",
+    "phone": "phone number",
+    "street_address": "street address",
+    "date_of_birth": "date of birth",
+}
+
+
+def _recommendation_for_group(source, kind, status, evidence):
+    label = SOURCE_LABELS[source]
+    kind_label = KIND_LABELS[kind]
+    locations = sorted({item["location"] for item in evidence})
+    location_label = ", ".join(locations)
+    if source == "github_repository":
+        names = sorted({item["repository_name"] for item in evidence if item.get("repository_name")})
+        target = f"{label} ({', '.join(names)})" if names else label
+    else:
+        target = label
+
+    if status == "supplied_text_unknown_audience":
+        reason = (
+            f"A {kind_label} pattern was found in the {label} ({location_label}). "
+            "DIAR has not verified the profile's audience. If this detail is visible publicly "
+            "and is not needed there, consider removing it or restricting its audience."
+        )
+        steps = ["Check the audience for this field on LinkedIn.",
+                 "If it is public and unnecessary, remove it or restrict who can see it."]
+    elif status == "user_declared_public":
+        reason = (
+            f"A {kind_label} pattern was found in the {label} ({location_label}). "
+            "You indicated that this resume is public; DIAR has not verified where it is posted. "
+            "Review the public copy and keep a recruitment contact route if you need one."
+        )
+        steps = ["Review the public copy of this resume.",
+                 "Remove or replace unnecessary personal contact details while keeping a suitable recruitment contact route."]
+    else:
+        reason = (
+            f"A {kind_label} pattern was found in {target} ({location_label}), which came from "
+            "GitHub's public profile/repository metadata. Review that field and remove the detail "
+            "or restrict the repository if it is unnecessary to share."
+        )
+        steps = [f"Review {location_label} in {target}.",
+                 "Remove or restrict unnecessary personal details; keep a professional contact route if useful."]
+
+    if any(item["detection_basis"] == "possible" for item in evidence):
+        reason = "This is a possible phone-number match. " + reason
+    priority = "high" if kind in ("street_address", "date_of_birth") else "medium"
+    if kind == "phone" and status in ("observed_public", "user_declared_public") and not any(
+            item["detection_basis"] == "possible" for item in evidence):
+        priority = "high"
+    action = f"review_public_exposure:{source}:{kind}"
+    return {
+        "id": f"R10-privacy-{source}-{kind}",
+        "condition": f"public_exposure_candidate AND source='{source}' AND kind='{kind}'",
+        "action": action,
+        "priority": priority,
+        "reason": reason,
+        "category": "visibility",
+        "source": source,
+        "evidence_ids": [item["id"] for item in evidence],
+        "suggested_steps": steps,
+    }
+
+
+def assess_visibility(privacy_evidence, visibility_level):
+    """Produce source-specific advice and an honest, coverage-aware summary."""
+    if visibility_level not in ("Fully Public", "Semi-Public", "Privacy Focused"):
+        raise ValueError("Unknown visibility level")
+    privacy_evidence = privacy_evidence or {}
+    evidence = privacy_evidence.get("evidence", [])
+    eligible = [item for item in evidence if item.get("recommendation_eligible")
+                and item.get("exposure_status") != "application_document"]
+    grouped = {}
+    for item in eligible:
+        key = (item.get("source"), item.get("kind"), item.get("exposure_status"))
+        if key[0] in SOURCE_LABELS and key[1] in KIND_LABELS:
+            grouped.setdefault(key, []).append(item)
+    rules = [_recommendation_for_group(source, kind, status, items)
+             for (source, kind, status), items in sorted(grouped.items())]
+
+    coverage = privacy_evidence.get("coverage", {})
+    findings = []
+    if rules:
+        findings.append(f"Found {len(eligible)} supported or possible exposure match(es) in the supplied/inspected data. Contact values are masked in these findings.")
+    else:
+        checked = any(coverage.get(source, {}).get("status") in ("checked", "limited", "supplied_text_only", "user_declared_public")
+                      for source in ("github_profile", "github_repositories", "linkedin", "resume"))
+        findings.append("No supported exposure patterns matched the inspected fields. This is not a complete privacy audit."
+                        if checked else "Public profile exposure was not assessed because no public-profile data was available.")
+
+    resume_status = coverage.get("resume", {}).get("status")
+    if resume_status == "application_document":
+        findings.append("Resume contact details were treated as job-application information, not public exposure.")
+    linkedin_coverage = coverage.get("linkedin", {})
+    if linkedin_coverage.get("status") == "supplied_text_only":
+        displayed_linkedin = any(item.get("source") == "linkedin" for item in eligible)
+        detected_linkedin = linkedin_coverage.get("findings_count")
+        if detected_linkedin == 0 or (detected_linkedin is None and not displayed_linkedin
+                                     and not privacy_evidence.get("omitted_findings_count", 0)):
+            findings.append("No supported exposure patterns were found in the LinkedIn text supplied. Its audience and account settings were not verified.")
+        elif not displayed_linkedin:
+            findings.append("LinkedIn findings may be omitted by the report limit; no source-specific action is shown without its evidence. Its audience and account settings were not verified.")
+    github_profile = coverage.get("github_profile", {}).get("status")
+    github_repositories = coverage.get("github_repositories", {}).get("status")
+    if github_profile not in ("checked",) or github_repositories not in ("checked",):
+        limitations = []
+        if github_profile not in ("checked",):
+            limitations.append("GitHub profile fields were not checked")
+        if github_repositories not in ("checked", "limited"):
+            limitations.append("GitHub repository metadata was not checked")
+        if limitations:
+            findings.append("Coverage: " + "; ".join(limitations) + ".")
+    if github_repositories == "limited":
+        findings.append("Coverage: only fetched GitHub repository metadata was checked; more repositories may exist.")
+    if privacy_evidence.get("omitted_findings_count", 0):
+        findings.append(f"Only the first {len(evidence)} findings are included; {privacy_evidence['omitted_findings_count']} more were omitted from the report.")
+    return {"findings": findings, "rules": rules, "evidence": evidence,
+            "coverage": coverage,
+            "limitations": privacy_evidence.get("limitations", []),
+            "supported_kinds": privacy_evidence.get("supported_kinds", list(SUPPORTED_KINDS)),
+            "assessment_version": 2,
+            "goal": "reduce_unnecessary_public_exposure"}

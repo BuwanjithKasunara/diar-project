@@ -11,15 +11,17 @@ Enhancements:
 - Explicit source state tracking (insufficient evidence detection).
 - GitHub recency and stale codebase penalties.
 - Negation and planned-intent aware rule generation.
-- Granular privacy compliance evaluation.
+    - Source-aware online-exposure advice.
 """
 from typing import Dict, Any, List, Set
 from . import fuzzy_logic
+from . import privacy_assessment as privacy_engine
 
 VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
 
 
-def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibility_level: str) -> dict:
+def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibility_level: str,
+                  privacy_evidence: dict = None) -> dict:
     fired_rules: List[Dict[str, Any]] = []
 
     # 1. Retrieve Contextual Skills
@@ -144,12 +146,13 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
         activity_score = 0.0
         activity_label = "insufficient_evidence"
         if gh_state in ("not_supplied", "failed"):
+            focus_mode = visibility_level == "Privacy Focused"
             fired_rules.append({
                 "id": "R4-github-insufficient-evidence",
                 "condition": f"github_source_state='{gh_state}'",
-                "action": "provide_github_profile",
-                "priority": "high",
-                "reason": "GitHub profile evidence is unavailable. Supply a username, check it for errors, or retry the analysis."
+                "action": "skip_github_analysis" if focus_mode else "provide_github_profile",
+                "priority": "low" if focus_mode else "high",
+                "reason": "GitHub evidence was not supplied. You can skip it or provide the public username only if comfortable; private repositories cannot be reviewed through this lookup." if focus_mode else "GitHub profile evidence is unavailable. Supply a username, check it for errors, or retry the analysis."
             })
         elif repository_state == "failed":
             fired_rules.append({
@@ -163,40 +166,65 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
         activity_score, activity_label = fuzzy_logic.activity_degree(active_count, max(repo_count, 1))
 
         if repo_count < min_repos:
+            action = {
+                "Fully Public": "recommend_building_portfolio_projects",
+                "Semi-Public": "recommend_curating_portfolio",
+                "Privacy Focused": "recommend_private_portfolio_projects",
+            }.get(visibility_level, "recommend_building_portfolio_projects")
+            reason = {
+                "Fully Public": f"'{benchmark_name}' benchmark profiles typically showcase at least {min_repos} public repositories; this GitHub profile has {repo_count}.",
+                "Semi-Public": f"The '{benchmark_name}' benchmark suggests more portfolio evidence. Develop projects and choose which ones you want to showcase publicly; others can stay private.",
+                "Privacy Focused": f"The '{benchmark_name}' benchmark suggests more portfolio evidence. You can develop projects privately and share selected evidence directly; additional public repositories are optional.",
+            }.get(visibility_level)
             fired_rules.append({
                 "id": "R4-repo-count",
                 "condition": f"github_repo_count({repo_count}) < benchmark_min({min_repos})",
-                "action": "recommend_building_portfolio_projects",
+                "action": action,
                 "priority": "high",
-                "reason": f"'{benchmark_name}' benchmark profiles typically showcase at least {min_repos} public repositories; this GitHub profile has {repo_count}."
+                "reason": reason
             })
 
         if stale_count > 0 and active_count == 0 and repo_count > 0:
+            action = "recommend_refreshing_repos" if visibility_level == "Fully Public" else (
+                "recommend_refreshing_selected_repos" if visibility_level == "Semi-Public" else "recommend_refreshing_private_repos"
+            )
+            reason = "Repository recency analysis indicates all public repositories are stale (>1-2 years without updates). Pushing fresh code or open-source commits will demonstrate active engagement." if visibility_level == "Fully Public" else (
+                "Selected public repositories may benefit from an update; other projects can remain private." if visibility_level == "Semi-Public" else
+                "Relevant portfolio work may benefit from updates. Public commit activity is optional; share only selected evidence."
+            )
             fired_rules.append({
                 "id": "R5-stale-codebases",
                 "condition": f"github_stale_repos={stale_count} AND active_recent=0",
-                "action": "recommend_refreshing_github_repos",
+                "action": action,
                 "priority": "high",
-                "reason": "Repository recency analysis indicates all public repositories are stale (>1-2 years without updates). Pushing fresh code or open-source commits will demonstrate active engagement."
+                "reason": reason
             })
         elif activity_label == "inactive" and repo_count > 0:
+            action = "recommend_increasing_github_activity" if visibility_level == "Fully Public" else (
+                "recommend_refreshing_selected_repos" if visibility_level == "Semi-Public" else "recommend_refreshing_private_repos"
+            )
             fired_rules.append({
                 "id": "R5-activity",
                 "condition": f"github_activity_degree={activity_score} -> '{activity_label}'",
-                "action": "recommend_increasing_github_activity",
+                "action": action,
                 "priority": "medium",
-                "reason": "Recent GitHub activity is classified as 'inactive', which can weaken perceived engagement."
+                "reason": "Recent GitHub activity is classified as 'inactive', which can weaken perceived engagement. Public commit activity is optional; keep relevant work current privately and share only selected evidence." if visibility_level == "Privacy Focused" else "Recent activity in selected repositories could be refreshed; other projects can remain private." if visibility_level == "Semi-Public" else "Recent GitHub activity is classified as 'inactive', which can weaken perceived engagement."
             })
 
         min_langs = benchmark.get("min_github_languages", 0)
         langs = len(github_data.get("languages", []))
         if langs < min_langs:
+            language_action = {
+                "Fully Public": "recommend_diversifying_projects",
+                "Semi-Public": "recommend_diversifying_selected_projects",
+                "Privacy Focused": "recommend_diversifying_private_projects",
+            }.get(visibility_level, "recommend_diversifying_projects")
             fired_rules.append({
                 "id": "R6-languages",
                 "condition": f"github_language_diversity({langs}) < benchmark_min({min_langs})",
-                "action": "recommend_diversifying_projects",
+                "action": language_action,
                 "priority": "low",
-                "reason": f"Benchmark identities typically demonstrate at least {min_langs} distinct programming languages; {langs} detected."
+                "reason": f"Benchmark identities typically demonstrate at least {min_langs} distinct programming languages; {langs} were detected. Add language breadth to your work; public sharing is optional." if visibility_level == "Privacy Focused" else f"Benchmark identities typically demonstrate at least {min_langs} distinct programming languages; {langs} were detected. Develop projects and choose which ones to showcase." if visibility_level == "Semi-Public" else f"Benchmark identities typically demonstrate at least {min_langs} distinct programming languages; {langs} detected."
             })
 
     # Rule Group 4: Certifications
@@ -214,35 +242,21 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
     completeness_score, completeness_label = fuzzy_logic.completeness_degree(profile.get("completeness_flags", {}))
 
     if source_states.get("linkedin") == "not_supplied":
+        linkedin_action = "skip_linkedin_analysis" if visibility_level == "Privacy Focused" else "provide_linkedin_for_analysis"
         fired_rules.append({
             "id": "R9-missing-linkedin",
             "condition": "linkedin_state='not_supplied'",
-            "action": "recommend_completing_linkedin",
+            "action": linkedin_action,
             "priority": "medium",
-            "reason": "No LinkedIn profile text was supplied, limiting visibility into professional networking and recommendations."
+            "reason": "No LinkedIn text was supplied. Paste relevant text only if you want that source included in the analysis; this does not mean you lack a LinkedIn account or need to publish more information." if visibility_level != "Privacy Focused" else "LinkedIn analysis is optional. You can skip it or supply text only if comfortable; a public profile is not required."
         })
 
-    # Rule Group 6: Granular Privacy & Visibility Controls
-    visibility_findings = []
+    # Rule Group 6: Source-aware privacy evidence and visibility goals.
     contact_exposed = profile.get("public_contact_info_detected", False)
+    visibility_assessment = privacy_engine.assess_visibility(privacy_evidence or {}, visibility_level)
+    fired_rules.extend(visibility_assessment["rules"])
 
-    if visibility_level == "Privacy Focused":
-        if contact_exposed:
-            fired_rules.append({
-                "id": "R10-privacy-contact",
-                "condition": "visibility='Privacy Focused' AND contact_info_detected=True",
-                "action": "recommend_reducing_public_contact_exposure",
-                "priority": "high",
-                "reason": "Direct contact identifiers (email/phone patterns) were detected in text while requesting a Privacy-Focused visibility mode."
-            })
-            visibility_findings.append("Direct contact info detected; personal identifiers have been flagged for redaction.")
-        else:
-            visibility_findings.append("Privacy-preserving mode active: external profile handles and contact details are masked.")
-
-    elif visibility_level == "Semi-Public":
-        visibility_findings.append("Semi-Public mode active: technical competencies and project metrics are shared, with personal contact info protected.")
-
-    elif visibility_level == "Fully Public":
+    if visibility_level == "Fully Public":
         if completeness_label != "complete":
             fired_rules.append({
                 "id": "R11-visibility-incomplete",
@@ -251,9 +265,9 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
                 "priority": "medium",
                 "reason": "A Fully Public goal works best when resume, GitHub, and LinkedIn are all populated to maximize visibility."
             })
-            visibility_findings.append("Profile is not yet fully complete across all 3 channels despite a Fully Public visibility goal.")
+            visibility_assessment["findings"].append("Profile is not yet fully complete across all 3 channels despite a Fully Public visibility goal.")
         else:
-            visibility_findings.append("Fully Public mode active: full portfolio and technical credentials are comprehensively showcased.")
+            visibility_assessment["findings"].append("Fully Public mode active: full portfolio and technical credentials are comprehensively showcased.")
 
     gap_analysis = {
         "missing_required_skills": missing_required,
@@ -272,11 +286,8 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
         "profile_completeness_label": completeness_label,
     }
 
-    visibility_assessment = {
-        "selected_level": visibility_level,
-        "public_contact_info_detected": contact_exposed,
-        "findings": visibility_findings,
-    }
+    visibility_assessment.update({"selected_level": visibility_level,
+                                  "public_contact_info_detected": contact_exposed})
 
     return {
         "gap_analysis": gap_analysis,
