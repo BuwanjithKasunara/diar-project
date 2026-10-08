@@ -2,12 +2,12 @@ import json
 import os
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from . import database
-from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier, privacy_assessment
+from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier, privacy_assessment, privacy
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
@@ -96,6 +96,7 @@ async def analyze(
     github_username: Optional[str] = Form(None),
     linkedin_text: Optional[str] = Form(""),
     resume_publicly_shared: bool = Form(False),
+    report_redaction: str = Form("mask_contacts"),
     resume: Optional[UploadFile] = File(None),
     db: Session = Depends(database.get_db),
 ):
@@ -103,6 +104,8 @@ async def analyze(
         raise HTTPException(status_code=400, detail=f"Unknown benchmark identity '{benchmark_identity}'.")
     if visibility_level not in VISIBILITY_LEVELS:
         raise HTTPException(status_code=400, detail=f"Unknown visibility level '{visibility_level}'.")
+    if report_redaction not in privacy.REPORT_POLICIES:
+        raise HTTPException(status_code=400, detail="Unknown saved report protection policy.")
 
     # 1. Information Extraction Module
     resume_text = ""
@@ -166,10 +169,8 @@ async def analyze(
         "missing_preferred_skills": alignment_result["gap_analysis"]["missing_preferred_skills"],
     }
 
-    sanitized_profile = sanitize_profile_for_visibility(profile, visibility_level)
-
     report_payload = {
-        "digital_identity_profile": sanitized_profile,
+        "digital_identity_profile": profile,
         "benchmark_comparison": benchmark_comparison,
         "ml_prediction": ml_prediction,
         "gap_analysis": alignment_result["gap_analysis"],
@@ -177,13 +178,16 @@ async def analyze(
         "recommendations": recommendations,
         "explanation_summary": explanation_summary,
         "github_warning": github_data.get("error"),
+        "report_metadata": {"version": 1, "report_redaction": report_redaction},
     }
+    report_payload = privacy.sanitize_report(report_payload, report_redaction, github_username)
+    stored_username = privacy.sanitize_report({"github_username": github_username}, report_redaction, github_username)["github_username"]
 
     # 7. Persist Digital Identity Report
     db_report = database.Report(
         benchmark_identity=benchmark_identity,
         visibility_level=visibility_level,
-        github_username=github_username,
+        github_username=stored_username,
         report_json=json.dumps(report_payload),
     )
     db.add(db_report)
@@ -196,16 +200,19 @@ async def analyze(
 @app.get("/api/reports")
 def list_reports(db: Session = Depends(database.get_db)):
     reports = db.query(database.Report).order_by(database.Report.id.desc()).limit(50).all()
-    return [
-        {
+    history = []
+    for r in reports:
+        policy = privacy.effective_report_policy(json.loads(r.report_json), r.visibility_level)
+        item = privacy.sanitize_report({
             "id": r.id,
             "benchmark_identity": r.benchmark_identity,
             "visibility_level": r.visibility_level,
             "github_username": r.github_username,
             "created_at": r.created_at.isoformat(),
-        }
-        for r in reports
-    ]
+            "report_metadata": {"report_redaction": policy},
+        }, policy, r.github_username)
+        history.append(item)
+    return history
 
 
 @app.get("/api/reports/{report_id}")
@@ -214,4 +221,17 @@ def get_report(report_id: int, db: Session = Depends(database.get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Report not found.")
     payload = json.loads(r.report_json)
+    policy = privacy.effective_report_policy(payload, r.visibility_level)
+    payload = privacy.sanitize_report(payload, policy, r.github_username)
+    payload.setdefault("report_metadata", {"version": 0, "report_redaction": policy, "legacy_policy": True})
     return {"id": r.id, "created_at": r.created_at.isoformat(), **payload}
+
+
+@app.delete("/api/reports/{report_id}", status_code=204)
+def delete_report(report_id: int, db: Session = Depends(database.get_db)):
+    report = db.query(database.Report).filter(database.Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    db.delete(report)
+    db.commit()
+    return Response(status_code=204)

@@ -59,8 +59,8 @@ An email is a review candidate, not proof that it is a personal address or a vul
 | Part | Author | Branch | Status |
 |---|---|---|---|
 | 1: Evidence foundation and development record | sda2003 | feat/privacy-evidence-foundation | Merged into main |
-| 2: Visibility rules and source-specific advice | raveesha2002 | feat/privacy-recommendations | Implemented on branch; ready for review |
-| 3: Independent report controls, interface and final docs | charya19 | fix/privacy-report-controls | Planned; starts after Part 2 merges |
+| 2: Visibility rules and source-specific advice | raveesha2002 | feat/privacy-recommendations | Merged into main |
+| 3: Independent report controls, interface and final docs | charya19 | fix/privacy-report-controls | Implemented on branch; awaiting user commit/review/merge |
 
 Part 1's evidence collector uses existing GitHub responses to scan metadata. Part 2 connects
 masked evidence and scan coverage to the analysis report and rule-derived recommendations.
@@ -70,8 +70,43 @@ conditional because the supplied text does not establish account audience or set
 Part 2 also adapts portfolio and source-completeness advice to the selected online-presence
 goal while preserving career scoring and the ML classifier inputs/model.
 
-The report's existing masking policy is still a separate concern. Part 3 will address
-independent saved-report controls and finish the documentation/interface updates.
+Part 3 adds independent saved-report controls and completes evidence/coverage rendering.
+The branch starts at merged Part 2 main commit `53d2fb6`. The preserved report sanitizer
+and deletion tests were reused and adapted to the independent policy design; the recovery
+stash and external backup remain available.
+
+## Part 3 report contract and verification
+
+New analysis accepts `report_redaction`: `mask_contacts` (default),
+`mask_contacts_and_handle`, or `none`. The policy applies across all nested report text
+after scoring/recommendations/ML prediction; numeric metrics are preserved. Evidence is
+always masked by its collector. `report_metadata` records version 1 and the chosen policy.
+The stored GitHub username, response, report reads and history agree with that policy.
+Legacy rows use the old visibility mapping only on read and are not silently rewritten.
+The old profile-sanitizer wrapper remains for compatibility.
+
+The frontend displays source fields, masked excerpts, provenance, source coverage and
+limits. The goal controls support keyboard input; saved protection has its own selector.
+The summary now groups personal details into source/type cards with plain-language advice,
+audience/provenance notices and links to evidence and recommendations. Empty inspected data
+and unavailable sources have different summary states; legacy findings retain their fallback.
+Deletion removes a selected DIAR row through a 204/404 API, with confirmation, cancellation,
+retryable error and success presentation. External profiles and backups are unaffected.
+The local prototype still has no authentication or ownership checks; masking is not access
+control and does not guarantee removal of every identifying detail.
+
+API verification uses synthetic sources and isolated temporary databases, including all
+nine goal/policy combinations, invariant career scores/ML inputs, private/public resume
+interpretation, metadata, create/read/history consistency, legacy reads and deletion.
+Browser verification uses an in-memory fixture and simulated deletion failure/success.
+The full suite passed 129 tests on 2026-10-08 with three existing deprecation warnings.
+Browser checks exercised the three goals, separate protection choices, masked GitHub and
+unknown-audience LinkedIn evidence, repository-failure coverage, and deletion cancellation,
+error retention and simulated success. Browser fixtures never accessed the production DB.
+Clean supplied text displayed the limited-scan/no-supported-pattern result. At a 390px
+mobile viewport the grid used one column without horizontal overflow; desktop rendering
+and console checks passed. Historical API reads are covered by automated tests; the frontend
+retains a fallback for older findings-only payloads.
 
 Before starting Part 1, the previous uncommitted improvement 3 files were copied outside
 the repo and preserved in a named Git stash. The backup is local recovery material, not
