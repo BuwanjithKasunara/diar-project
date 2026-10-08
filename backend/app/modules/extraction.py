@@ -34,6 +34,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from collections import defaultdict, Counter
 import fitz  # PyMuPDF
 import requests
+from . import privacy_assessment
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -297,6 +298,8 @@ def _github_failure(username: str, source_state: str, error: str) -> dict:
         "moderate_repo_count": 0,
         "stale_repo_count": 0,
         "profile_complete": False,
+        "privacy_data": privacy_assessment.collect_github_privacy_data(
+            profile_state=source_state, repository_state=source_state),
     }
 
 
@@ -376,6 +379,10 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
         )
 
     non_fork_repos = [r for r in repos if not r.get("fork")]
+    privacy_data = privacy_assessment.collect_github_privacy_data(
+        profile=profile, repositories=repos, repository_state=repository_state,
+        repository_coverage=repository_coverage,
+    )
 
     # Dynamic Recency Analysis (days elapsed rather than static year)
     now = datetime.now(timezone.utc)
@@ -414,6 +421,7 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
         "source_state": source_state,
         "repository_state": repository_state,
         "repository_coverage": repository_coverage,
+        "privacy_data": privacy_data,
         "repositories_fetched_count": len(repos),
         "error": warning,
         "username": clean_user,
