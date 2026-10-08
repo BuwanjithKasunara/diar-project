@@ -21,14 +21,36 @@ ACTION_LABELS = {
     "recommend_building_portfolio_projects": "Build additional portfolio projects on GitHub",
     "recommend_increasing_github_activity": "Increase GitHub activity / commit frequency",
     "recommend_diversifying_projects": "Diversify projects across more programming languages",
+    "recommend_diversifying_selected_projects": "Build technical breadth and choose which projects to showcase",
+    "recommend_diversifying_private_projects": "Build technical breadth privately; public sharing is optional",
     "recommend_certification": "Pursue a relevant professional certification",
     "recommend_adding_github": "Add and populate a GitHub profile",
     "provide_github_profile": "Provide a valid GitHub profile for analysis",
     "retry_github_analysis": "Retry GitHub analysis when repository data is available",
     "recommend_refreshing_github_repos": "Refresh older GitHub repositories with relevant updates",
+    "recommend_refreshing_repos": "Refresh older GitHub repositories with relevant updates",
     "recommend_completing_linkedin": "Complete and expand LinkedIn profile content",
     "recommend_reducing_public_contact_exposure": "Reduce publicly exposed personal contact information",
     "recommend_maximising_profile_completeness": "Maximise profile completeness across all platforms",
+    "provide_linkedin_for_analysis": "Paste LinkedIn text if you want it included in the analysis",
+    "skip_linkedin_analysis": "Skip LinkedIn analysis or share its text only if comfortable",
+    "skip_github_analysis": "Skip GitHub analysis or provide its public username only if comfortable",
+    "recommend_private_portfolio_projects": "Develop portfolio projects privately and share selected evidence when useful",
+    "recommend_curating_portfolio": "Develop portfolio work and choose which projects to showcase publicly",
+    "recommend_refreshing_selected_repos": "Keep selected public repositories current; other projects can stay private",
+    "recommend_refreshing_private_repos": "Keep relevant portfolio work current; public activity is optional",
+    "review_public_exposure": "Review exposed {kind} in {source}",
+}
+
+EXPOSURE_LABELS = {
+    "github_profile": "GitHub profile",
+    "github_repository": "GitHub repository metadata",
+    "linkedin": "LinkedIn text you supplied",
+    "resume": "resume you marked publicly shared",
+}
+EXPOSURE_KIND_LABELS = {
+    "email": "email address", "phone": "phone number",
+    "street_address": "street address", "date_of_birth": "date of birth",
 }
 
 
@@ -36,6 +58,12 @@ def _label_for(action: str) -> str:
     key, separator, arg = action.partition(":")
     template = ACTION_LABELS.get(key)
     if template is not None:
+        if key == "review_public_exposure":
+            source, _, kind = arg.partition(":")
+            return template.format(
+                source=EXPOSURE_LABELS.get(source, "the supplied source"),
+                kind=EXPOSURE_KIND_LABELS.get(kind, "personal detail"),
+            )
         return template.format(arg=arg)
 
     # Keep future actions readable, including their skill or other argument.
@@ -68,6 +96,7 @@ def generate_recommendations(fired_rules: list) -> list:
             "recommendation": _label_for(action),
             "rule_id": rule.get("id"),
             "explanation": rule.get("reason"),
+            **{key: rule[key] for key in ("category", "source", "evidence_ids", "suggested_steps") if key in rule},
         })
         rank += 1
 

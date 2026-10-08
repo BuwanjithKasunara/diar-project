@@ -117,13 +117,15 @@ def build_digital_identity_profile(resume: dict, github: dict, linkedin: dict) -
         },
         "completeness_flags": completeness_flags,
         "sources_provided_count": valid_sources_count,
+        # Compatibility fallback for callers without source-aware evidence.
+        # The analysis API overwrites this with provenance-aware findings.
         "public_contact_info_detected": _detect_contact_exposure(resume, linkedin),
     }
     return profile
 
 
 def _detect_contact_exposure(resume: dict, linkedin: dict) -> bool:
-    """Heuristic: detects exposed email or phone numbers in text."""
+    """Deprecated compatibility fallback; API analysis derives this from provenance-aware evidence."""
     import re
     text = (resume.get("experience_snippet", "") or "") + (linkedin.get("headline", "") or "")
     email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")

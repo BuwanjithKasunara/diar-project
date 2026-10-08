@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from . import database
-from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier
+from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier, privacy_assessment
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
@@ -95,6 +95,7 @@ async def analyze(
     visibility_level: str = Form(...),
     github_username: Optional[str] = Form(None),
     linkedin_text: Optional[str] = Form(""),
+    resume_publicly_shared: bool = Form(False),
     resume: Optional[UploadFile] = File(None),
     db: Session = Depends(database.get_db),
 ):
@@ -121,6 +122,16 @@ async def analyze(
 
     # 2. Identity Construction Module
     profile = identity_construction.build_digital_identity_profile(resume_data, github_data, linkedin_data)
+    privacy_evidence = privacy_assessment.collect_privacy_evidence(
+        resume_text, linkedin_text or "", github_data.get("privacy_data"),
+        resume_publicly_shared=resume_publicly_shared,
+    )
+    profile["public_contact_info_detected"] = any(
+        item.get("kind") in ("email", "phone")
+        and item.get("recommendation_eligible")
+        and item.get("exposure_status") in ("observed_public", "user_declared_public")
+        for item in privacy_evidence["evidence"]
+    )
 
     # 3. Machine Learning Role Classification
     combined_ml_text = "\n".join(filter(None, [
@@ -133,7 +144,9 @@ async def analyze(
 
     # 4. Identity Benchmark Module (lookup) + Digital Identity Alignment Engine
     benchmark = BENCHMARKS[benchmark_identity]
-    alignment_result = alignment_engine.run_alignment(profile, benchmark, benchmark_identity, visibility_level)
+    alignment_result = alignment_engine.run_alignment(
+        profile, benchmark, benchmark_identity, visibility_level, privacy_evidence=privacy_evidence,
+    )
 
     # 5. Recommendation Engine
     recommendations = recommendation_engine.generate_recommendations(alignment_result["fired_rules"])
