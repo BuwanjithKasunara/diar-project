@@ -27,8 +27,11 @@ def build_explanation_summary(profile: dict, benchmark_name: str, gap_analysis: 
     ]
 
     if activity_label == "insufficient_evidence":
+        coverage = profile.get("github", {}).get("repository_coverage")
         narrative_parts.append(
-            "GitHub repository evidence was withheld due to unsupplied or inaccessible source data, avoiding an unfair activity penalty."
+            "GitHub repository judgements were withheld because only part of the public portfolio was retrieved."
+            if coverage == "limited" else
+            "GitHub repository judgements were withheld because repository data was not supplied or could not be retrieved."
         )
     else:
         narrative_parts.append(

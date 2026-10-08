@@ -44,6 +44,14 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
   numerical stack to install. `scikit-fuzzy` is listed as the proposed library in the write-up; swapping
   it in is a drop-in change if you want the exact library named in Section 9.
 - **GitHub**: uses the real public GitHub REST API (`api.github.com`) — no simulation.
+  - Profile and repository requests are handled separately. If the profile loads but the
+    repository request fails, usable profile evidence is retained and a notice is shown.
+  - The prototype analyses one page of up to 100 public repositories sorted by update time,
+    including forks in that page limit; portfolio metrics use only non-fork repositories.
+    Pagination links and the profile's public repository count identify incomplete coverage.
+  - Repository count, activity, and language-diversity recommendations are withheld when
+    repository retrieval fails or coverage is incomplete. A successfully retrieved empty
+    portfolio remains distinguishable from unavailable data.
 - **LinkedIn**: LinkedIn has no public scraping API, so the prototype accepts pasted profile text
   (headline / about / skills / experience) which is run through the same NLP extraction pipeline used
   for the resume.
@@ -77,7 +85,7 @@ We recommend using a Python virtual environment (`.venv`) to isolate dependencie
 
 3. **Run tests and launch the backend:**
    ```bash
-   python -m pytest tests/test_pipeline.py -v   # Run automated regression test suite (12/12 passing)
+   python -m pytest tests -v                    # Run the full automated regression suite
    python train_ml_model.py                     # Optional: re-train/evaluate ML classifier
    python -m uvicorn app.main:app --reload --port 8000
    ```

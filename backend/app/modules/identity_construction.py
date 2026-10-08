@@ -90,6 +90,9 @@ def build_digital_identity_profile(resume: dict, github: dict, linkedin: dict) -
         "github": {
             "username": github.get("username"),
             "state": g_state,
+            "repository_state": github.get("repository_state", g_state),
+            "repository_coverage": github.get("repository_coverage"),
+            "repositories_fetched_count": github.get("repositories_fetched_count", 0),
             "error": github.get("error"),
             "repo_count": github.get("repo_count", 0),
             "recently_active_repo_count": github.get("recently_active_repo_count", 0),

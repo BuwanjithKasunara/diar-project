@@ -134,21 +134,31 @@ def run_alignment(profile: dict, benchmark: dict, benchmark_name: str, visibilit
     # Rule Group 3: GitHub Activity, Recency & State Tracking
     github_data = profile.get("github", {})
     gh_state = github_data.get("state", "not_supplied")
+    repository_state = github_data.get("repository_state", gh_state)
     repo_count = github_data.get("repo_count", 0)
     active_count = github_data.get("recently_active_repo_count", 0)
     stale_count = github_data.get("stale_repo_count", 0)
     min_repos = benchmark.get("min_github_repos", 0)
 
-    if gh_state in ("not_supplied", "failed"):
+    if repository_state != "analysed":
         activity_score = 0.0
         activity_label = "insufficient_evidence"
-        fired_rules.append({
-            "id": "R4-github-insufficient-evidence",
-            "condition": f"github_source_state='{gh_state}'",
-            "action": "provide_github_profile",
-            "priority": "high",
-            "reason": f"GitHub source is '{gh_state}'. Public code evidence cannot be verified without a valid GitHub username."
-        })
+        if gh_state in ("not_supplied", "failed"):
+            fired_rules.append({
+                "id": "R4-github-insufficient-evidence",
+                "condition": f"github_source_state='{gh_state}'",
+                "action": "provide_github_profile",
+                "priority": "high",
+                "reason": "GitHub profile evidence is unavailable. Supply a username, check it for errors, or retry the analysis."
+            })
+        elif repository_state == "failed":
+            fired_rules.append({
+                "id": "R4-github-repositories-unavailable",
+                "condition": "github_profile_available AND github_repository_state='failed'",
+                "action": "retry_github_analysis",
+                "priority": "medium",
+                "reason": "The GitHub profile loaded, but its repository data is unavailable. Retry before assessing repository count, activity, or language diversity."
+            })
     else:
         activity_score, activity_label = fuzzy_logic.activity_degree(active_count, max(repo_count, 1))
 
