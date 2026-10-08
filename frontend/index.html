@@ -374,7 +374,7 @@ function renderReport(report) {
 
   // 01 Alignment scores
   var ghCard = ga.github_activity_label === "insufficient_evidence"
-    ? scoreCard("GitHub Activity", "Withheld (No Data)", null)
+    ? scoreCard("GitHub Activity", "Withheld (Insufficient Data)", null)
     : scoreCard("GitHub Activity", ga.github_activity_label, ga.github_activity_score);
 
   var scoreRow = el("div", { class: "score-row" }, [
@@ -384,6 +384,12 @@ function renderReport(report) {
     ghCard
   ]);
   container.appendChild(panel([h2("01", "Digital Identity Alignment"), scoreRow]));
+  if (report.github_warning) {
+    container.appendChild(panel([
+      subhead("GitHub Data Notice"),
+      el("div", { class: "visibility-note" }, [report.github_warning])
+    ]));
+  }
 
   // 02 Benchmark comparison
   var bmItems = [
@@ -449,10 +455,16 @@ function renderReport(report) {
   ];
   if (p.github && p.github.username) {
     profileContent.push(subhead("GitHub — @" + p.github.username));
-    profileContent.push(el("div", { class: "hint" }, [
-      p.github.repo_count + " repositories · " + (p.github.recently_active_repo_count || 0) +
-      " fresh (<1y) · " + (p.github.stale_repo_count || 0) + " stale (>2y) · " + p.github.followers + " followers"
-    ]));
+    if (p.github.repository_state === "failed" || p.github.repository_state === "not_supplied") {
+      profileContent.push(el("div", { class: "hint" }, ["Repository data unavailable; portfolio metrics are withheld."]));
+    } else {
+      var coverageLabel = p.github.repository_coverage === "limited"
+        ? "In the retrieved subset: " : "";
+      profileContent.push(el("div", { class: "hint" }, [
+        coverageLabel + p.github.repo_count + " non-fork repositories · " + (p.github.recently_active_repo_count || 0) +
+        " fresh (<1y) · " + (p.github.stale_repo_count || 0) + " stale (>2y) · " + p.github.followers + " followers"
+      ]));
+    }
   }
   container.appendChild(panel(profileContent));
 

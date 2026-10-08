@@ -24,6 +24,7 @@ ACTION_LABELS = {
     "recommend_certification": "Pursue a relevant professional certification",
     "recommend_adding_github": "Add and populate a GitHub profile",
     "provide_github_profile": "Provide a valid GitHub profile for analysis",
+    "retry_github_analysis": "Retry GitHub analysis when repository data is available",
     "recommend_refreshing_github_repos": "Refresh older GitHub repositories with relevant updates",
     "recommend_completing_linkedin": "Complete and expand LinkedIn profile content",
     "recommend_reducing_public_contact_exposure": "Reduce publicly exposed personal contact information",

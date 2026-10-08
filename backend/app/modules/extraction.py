@@ -276,6 +276,30 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     return text
 
 
+GITHUB_REPOSITORY_LIMIT = 100
+
+
+def _github_failure(username: str, source_state: str, error: str) -> dict:
+    """Return an explicit unavailable state, rather than an empty portfolio."""
+    return {
+        "source": "github",
+        "source_state": source_state,
+        "repository_state": source_state,
+        "repository_coverage": "unavailable",
+        "repositories_fetched_count": 0,
+        "username": username or None,
+        "error": error,
+        "skills": [],
+        "contextual_skills": extract_contextual_skills(""),
+        "languages": [],
+        "repo_count": 0,
+        "recently_active_repo_count": 0,
+        "moderate_repo_count": 0,
+        "stale_repo_count": 0,
+        "profile_complete": False,
+    }
+
+
 def extract_from_github(username: str, github_token: Optional[str] = None) -> dict:
     """
     Pulls public profile + repo data from the GitHub REST API.
@@ -283,81 +307,73 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
     """
     clean_user = (username or "").strip()
     if not clean_user:
-        return {
-            "source": "github",
-            "source_state": "not_supplied",
-            "error": "No GitHub username supplied",
-            "skills": [],
-            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
-            "languages": [],
-            "repo_count": 0,
-            "recently_active_repo_count": 0,
-            "stale_repo_count": 0,
-            "profile_complete": False
-        }
+        return _github_failure("", "not_supplied", "No GitHub username supplied")
 
     headers = {"Accept": "application/vnd.github+json"}
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
 
     profile_url = f"https://api.github.com/users/{clean_user}"
-    repos_url = f"https://api.github.com/users/{clean_user}/repos?per_page=100&sort=updated"
+    repos_url = f"https://api.github.com/users/{clean_user}/repos?per_page={GITHUB_REPOSITORY_LIMIT}&sort=updated"
 
     try:
         profile_resp = requests.get(profile_url, headers=headers, timeout=10)
-        repos_resp = requests.get(repos_url, headers=headers, timeout=10)
-    except requests.RequestException as e:
-        return {
-            "source": "github",
-            "source_state": "failed",
-            "error": str(e),
-            "skills": [],
-            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
-            "languages": [],
-            "repo_count": 0,
-            "recently_active_repo_count": 0,
-            "profile_complete": False
-        }
+    except requests.RequestException:
+        return _github_failure(clean_user, "failed", "GitHub profile could not be retrieved; try again later.")
 
     if profile_resp.status_code == 404:
-        return {
-            "source": "github",
-            "source_state": "failed",
-            "error": f"GitHub user '{clean_user}' not found",
-            "skills": [],
-            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
-            "languages": [],
-            "repo_count": 0,
-            "recently_active_repo_count": 0,
-            "profile_complete": False
-        }
+        return _github_failure(clean_user, "failed", f"GitHub user '{clean_user}' not found")
     if profile_resp.status_code in (403, 429):
-        return {
-            "source": "github",
-            "source_state": "failed",
-            "error": "GitHub API rate limit reached; supply a token or try again later.",
-            "skills": [],
-            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
-            "languages": [],
-            "repo_count": 0,
-            "recently_active_repo_count": 0,
-            "profile_complete": False
-        }
+        return _github_failure(clean_user, "failed", "GitHub API access was denied or rate limited; try again later.")
     if profile_resp.status_code != 200:
-        return {
-            "source": "github",
-            "source_state": "failed",
-            "error": f"GitHub API status {profile_resp.status_code} for '{clean_user}'",
-            "skills": [],
-            "contextual_skills": {"claimed": [], "planned": [], "negated": [], "uncertain": [], "frequency": {}, "normalized_weights": {}},
-            "languages": [],
-            "repo_count": 0,
-            "recently_active_repo_count": 0,
-            "profile_complete": False
-        }
+        return _github_failure(clean_user, "failed", f"GitHub profile request returned status {profile_resp.status_code}.")
 
-    profile = profile_resp.json()
-    repos = repos_resp.json() if repos_resp.status_code == 200 else []
+    try:
+        profile = profile_resp.json()
+        if not isinstance(profile, dict):
+            raise ValueError("Expected a GitHub profile object")
+    except ValueError:
+        return _github_failure(clean_user, "failed", "GitHub returned an unreadable profile response; try again later.")
+
+    # Keep usable profile evidence even if the independent repository request fails.
+    repos = []
+    repository_state = "failed"
+    repository_coverage = "unavailable"
+    warning = None
+    try:
+        repos_resp = requests.get(repos_url, headers=headers, timeout=10)
+        if repos_resp.status_code == 200:
+            repos = repos_resp.json()
+            if not isinstance(repos, list) or any(not isinstance(repo, dict) for repo in repos):
+                raise ValueError("Expected a GitHub repository list")
+            # One bounded request keeps the prototype responsive. Never imply that
+            # this page represents the entire portfolio when another page exists.
+            limited = bool(repos_resp.links.get("next")) or profile.get("public_repos", 0) > len(repos)
+            repository_state = "partial" if limited else "analysed"
+            repository_coverage = "limited" if limited else "complete"
+            if limited:
+                warning = (
+                    f"GitHub analysis covers only the first {len(repos)} public repositories "
+                    f"sorted by update time (limit {GITHUB_REPOSITORY_LIMIT}, including forks). "
+                    "Repository count, activity, and language recommendations are withheld because coverage is incomplete."
+                )
+        else:
+            warning = (
+                f"GitHub profile loaded, but repository data could not be retrieved "
+                f"(status {repos_resp.status_code}). "
+                "Repository count, activity, and language recommendations are withheld. Try again later."
+            )
+    except ValueError:
+        repos = []
+        warning = (
+            "GitHub profile loaded, but the repository response was unreadable. "
+            "Repository count, activity, and language recommendations are withheld. Try again later."
+        )
+    except requests.RequestException:
+        warning = (
+            "GitHub profile loaded, but the repository request failed. "
+            "Repository count, activity, and language recommendations are withheld. Try again later."
+        )
 
     non_fork_repos = [r for r in repos if not r.get("fork")]
 
@@ -390,12 +406,16 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
     combined_text = f"{descriptions_text} {topic_text} {profile.get('bio') or ''}"
     contextual = extract_contextual_skills(combined_text)
 
-    profile_complete = bool(profile.get("bio")) and bool(profile.get("name")) and len(non_fork_repos) > 0
-    source_state = "partial" if len(non_fork_repos) == 0 else "analysed"
+    profile_complete = bool(profile.get("bio")) and bool(profile.get("name")) and len(non_fork_repos) > 0 and repository_state == "analysed"
+    source_state = "analysed" if repository_state == "analysed" else "partial"
 
     return {
         "source": "github",
         "source_state": source_state,
+        "repository_state": repository_state,
+        "repository_coverage": repository_coverage,
+        "repositories_fetched_count": len(repos),
+        "error": warning,
         "username": clean_user,
         "name": profile.get("name"),
         "bio": profile.get("bio"),
