@@ -7,6 +7,8 @@
 - Group 1 delivery records: [input validation](improvements/id-1-delivery.md),
   [career evidence](improvements/id-2-delivery.md) and
   [skill context](improvements/id-3-delivery.md).
+- [Analysis recovery and responsiveness](improvements/id-7-delivery.md): prior-report
+  preservation, cancellation/deadline behavior, worker isolation and ML failure fallback.
 - [Privacy requirement realignment](privacy/realignment.md): requirement misunderstanding,
   intended behavior, evidence limits, implementation stages, verification and rollback.
 - [Privacy implementation plan](privacy/implementation-plan.md): detailed specification
