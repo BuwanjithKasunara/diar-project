@@ -193,6 +193,9 @@
 "use strict";
 
 var API_BASE = window.DIAR_API_BASE || "http://localhost:8000";
+var ANALYSIS_TIMEOUT_MS = 45000;
+var analysisRequestId = 0;
+var analysisController = null;
 
 var state = {
   benchmarks: [],
@@ -454,7 +457,11 @@ function renderReport(report) {
     var keepButton = el("button", { type: "button", onClick: function () { state.confirmingDelete = false; state.deleteError = null; renderResultsPanel(); } }, ["Keep report"]);
     confirmButton.disabled = keepButton.disabled = state.deletingReport;
     savedContent.push(el("div", {}, [confirmButton, keepButton]));
-  } else savedContent.push(el("button", { type: "button", onClick: function () { state.confirmingDelete = true; renderResultsPanel(); } }, ["Delete saved report"]));
+  } else {
+    var deleteButton = el("button", { type: "button", onClick: function () { state.confirmingDelete = true; renderResultsPanel(); } }, ["Delete saved report"]);
+    deleteButton.disabled = state.loading;
+    savedContent.push(deleteButton);
+  }
   if (state.deleteError) savedContent.push(el("div", { class: "error-box", role: "alert" }, [state.deleteError]));
   container.appendChild(panel(savedContent));
 
@@ -580,9 +587,11 @@ function renderResultsPanel() {
       el("div", { class: "loading" }, [
         el("div", { class: "spinner" }, []),
         " running extraction, alignment & recommendation pipeline…"
-      ])
+      ]),
+      el("button", { type: "button", onClick: cancelAnalysis }, ["Cancel analysis"]),
+      el("p", { class: "hint" }, [state.report ? "Your previous report remains below while this analysis runs." : "Cancelling stops waiting; the server may still finish and save a report."])
     ]));
-    return;
+    if (!state.report) return;
   }
 
   if (!state.report) {
@@ -688,6 +697,7 @@ async function loadVisibilityLevels() {
 
 async function runAnalysis(e) {
   e.preventDefault();
+  if (state.loading || state.deletingReport) return;
   var username = state.githubUsername.trim();
   var validationError = !state.resumeFile && !username && !state.linkedinText.trim()
     ? "Supply a resume, GitHub username or LinkedIn text before running analysis."
@@ -699,7 +709,11 @@ async function runAnalysis(e) {
   if (validationError) { state.error = validationError; renderError(); return; }
   state.loading = true;
   state.error = null;
-  state.report = null;
+  var requestId = ++analysisRequestId;
+  var controller = new AbortController();
+  analysisController = controller;
+  var timedOut = false;
+  var timer = setTimeout(function () { timedOut = true; controller.abort(); }, ANALYSIS_TIMEOUT_MS);
   state.confirmingDelete = false;
   state.deleteError = null;
   state.reportNotice = null;
@@ -717,26 +731,44 @@ async function runAnalysis(e) {
     form.append("resume_publicly_shared", state.resumePubliclyShared ? "true" : "false");
     form.append("report_redaction", state.reportRedaction);
 
-    var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form });
+    var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form, signal: controller.signal });
     if (!res.ok) {
       var errData = {};
       try { errData = await res.json(); } catch (e2) {}
       throw new Error(errData.detail || ("Request failed with status " + res.status));
     }
     var data = await res.json();
+    if (requestId !== analysisRequestId) return;
     state.report = data;
   } catch (err) {
-    state.error = err.message || "Something went wrong while analysing this profile.";
+    if (requestId !== analysisRequestId) return;
+    state.error = timedOut ? "Analysis timed out. The server may still finish and save a report. Check saved reports before retrying."
+      : err.name === "AbortError" ? "Analysis cancelled. The server may still finish and save a report."
+      : err.message || "Something went wrong while analysing this profile.";
+    if (state.report) state.error += " Your previous report is still shown.";
   } finally {
-    state.loading = false;
-    renderResultsPanel();
-    renderError();
-    renderRunButton();
+    clearTimeout(timer);
+    if (requestId === analysisRequestId) {
+      analysisController = null;
+      state.loading = false;
+      renderResultsPanel(); renderError(); renderRunButton();
+    }
   }
 }
 
+function cancelAnalysis() {
+  if (!state.loading || !analysisController) return;
+  ++analysisRequestId;
+  analysisController.abort();
+  analysisController = null;
+  state.loading = false;
+  state.error = "Analysis cancelled. The server may still finish and save a report. Check saved reports before retrying.";
+  if (state.report) state.error += " Your previous report is still shown.";
+  renderResultsPanel(); renderError(); renderRunButton();
+}
+
 async function deleteSavedReport() {
-  if (!state.report || state.deletingReport) return;
+  if (!state.report || state.deletingReport || state.loading) return;
   var reportId = state.report.id;
   state.deletingReport = true;
   state.deleteError = null;

@@ -64,6 +64,18 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 
 ## Setup & Running
 
+### Analysis recovery
+
+While another analysis runs, the previous successful report stays visible.
+Failed attempts retain it; Cancel analysis stops the browser from waiting.
+The browser has a 45-second timeout, and backend report construction has a
+40-second deadline after upload validation. Backend deadline errors do not save
+a report, but browser cancellation/network failure may occur while the server
+continues and saves one. Check `/api/reports` before retrying if needed; automatic
+retries are not performed. Saved-report history UI is planned separately.
+If ML prediction fails, DIAR still returns its available rule-based analysis.
+See the [recovery delivery record](docs/improvements/id-7-delivery.md) for limits.
+
 ### Input and evidence limits
 
 Supply at least one resume PDF, GitHub username or nonempty LinkedIn text.

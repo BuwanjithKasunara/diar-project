@@ -14,6 +14,7 @@ Given a user's consolidated profile text, this module:
 import os
 import csv
 import logging
+import threading
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ DATASET_PATH = os.path.join(DATA_DIR, "career_profiles_dataset.csv")
 MODEL_PATH = os.path.join(DATA_DIR, "career_classifier.joblib")
 
 _MODEL_PIPELINE = None
+_MODEL_LOCK = threading.Lock()
 
 
 def load_dataset(csv_path: str = DATASET_PATH) -> tuple[List[str], List[str]]:
@@ -97,6 +99,12 @@ def train_model(save: bool = True):
 
 
 def get_model():
+    # Prevent concurrent requests from loading/training/writing the same artifact.
+    with _MODEL_LOCK:
+        return _get_model_unlocked()
+
+
+def _get_model_unlocked():
     """Returns the cached model, loads from disk, or trains on-the-fly."""
     global _MODEL_PIPELINE
     if _MODEL_PIPELINE is not None:

@@ -1,8 +1,8 @@
 # ID 2: Conservative career evidence interpretation
 
-Status: implemented on `fix/analysis-evidence-foundation`; awaiting commit/review/merge.
+Status: merged from `fix/analysis-evidence-foundation` in PR #6 (`1f25833`).
 Author for commit commands: raveesha2002.
-Starting commit: `0839edd`; PR and merge commit: pending.
+Starting commit: `0839edd`; implementation commit: `91f9962`.
 
 ## Problem and final behavior
 

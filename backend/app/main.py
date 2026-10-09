@@ -1,6 +1,9 @@
 import json
 import os
 import re
+import logging
+from functools import partial
+import anyio
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Response
@@ -17,6 +20,8 @@ with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
 VISIBILITY_LEVELS = ["Fully Public", "Semi-Public", "Privacy Focused"]
 MAX_RESUME_BYTES = 5 * 1024 * 1024
 MAX_LINKEDIN_CHARACTERS = 100_000
+ANALYSIS_TIMEOUT_SECONDS = 40
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="AI-Based Digital Identity Analysis and Recommendation System",
@@ -118,13 +123,46 @@ async def analyze(
     if resume is None and not github_username and not linkedin_text:
         raise HTTPException(status_code=400, detail="Supply a resume, GitHub username or LinkedIn text before running analysis.")
 
-    # 1. Information Extraction Module
-    resume_text = ""
+    file_bytes = None
     if resume is not None:
-        file_bytes = await resume.read(MAX_RESUME_BYTES + 1)
-        await resume.close()
+        try:
+            file_bytes = await resume.read(MAX_RESUME_BYTES + 1)
+        finally:
+            await resume.close()
         if len(file_bytes) > MAX_RESUME_BYTES:
             raise HTTPException(status_code=413, detail="The resume PDF must be no larger than 5 MiB.")
+    # Only immutable source values go to the worker; the DB session stays here.
+    try:
+        with anyio.fail_after(ANALYSIS_TIMEOUT_SECONDS):
+            report_payload, stored_username = await anyio.to_thread.run_sync(
+                partial(_build_report, file_bytes, github_username, linkedin_text,
+                        benchmark_identity, visibility_level, resume_publicly_shared,
+                        report_redaction), abandon_on_cancel=True,
+            )
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Analysis took too long. No report was saved for this timed-out analysis. Try fewer sources or retry later.")
+
+    # 7. Persist Digital Identity Report
+    db_report = database.Report(
+        benchmark_identity=benchmark_identity,
+        visibility_level=visibility_level,
+        github_username=stored_username,
+        report_json=json.dumps(report_payload),
+    )
+    db.add(db_report)
+    db.commit()
+    db.refresh(db_report)
+
+    return {"id": db_report.id, **report_payload}
+
+
+
+def _build_report(file_bytes, github_username, linkedin_text, benchmark_identity,
+                  visibility_level, resume_publicly_shared, report_redaction):
+    """Build protected report data in a worker without accessing report storage."""
+    # 1. Information Extraction Module
+    resume_text = ""
+    if file_bytes is not None:
         try:
             resume_text = extraction.extract_text_from_pdf(file_bytes)
         except ValueError as error:
@@ -161,7 +199,15 @@ async def analyze(
         f"Skills: {', '.join(profile.get('skills', []))}" if profile.get('skills') else "",
         f"Projects: {', '.join(profile.get('projects', []))}" if profile.get('projects') else "",
     ]))
-    ml_prediction = ml_classifier.predict_role(combined_ml_text, target_benchmark=benchmark_identity)
+    try:
+        ml_prediction = ml_classifier.predict_role(combined_ml_text, target_benchmark=benchmark_identity)
+    except Exception as error:
+        logger.warning("ML prediction unavailable (%s)", type(error).__name__)
+        ml_prediction = {
+            "model_available": False, "predicted_role": "Unavailable",
+            "confidence": 0.0, "probabilities": {}, "matches_target": False,
+            "top_features": [], "note": "Role prediction is temporarily unavailable. Rule-based analysis is still included.",
+        }
 
     # 4. Identity Benchmark Module (lookup) + Digital Identity Alignment Engine
     benchmark = BENCHMARKS[benchmark_identity]
@@ -201,18 +247,7 @@ async def analyze(
     report_payload = privacy.sanitize_report(report_payload, report_redaction, github_username)
     stored_username = privacy.sanitize_report({"github_username": github_username}, report_redaction, github_username)["github_username"]
 
-    # 7. Persist Digital Identity Report
-    db_report = database.Report(
-        benchmark_identity=benchmark_identity,
-        visibility_level=visibility_level,
-        github_username=stored_username,
-        report_json=json.dumps(report_payload),
-    )
-    db.add(db_report)
-    db.commit()
-    db.refresh(db_report)
-
-    return {"id": db_report.id, **report_payload}
+    return report_payload, stored_username
 
 
 @app.get("/api/reports")
