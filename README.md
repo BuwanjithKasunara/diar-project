@@ -64,6 +64,23 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 
 ## Setup & Running
 
+### Optional public repository file privacy review
+
+Check **Also review public README and supported root text files** to include bounded
+file review with a GitHub username. It is off by default. DIAR checks one root README
+format plus `CONTRIBUTING.md` and `SECURITY.md` in up to five fetched public repositories,
+including forks. It does not scan nested/source files, private repositories or history.
+There are at most 25 extra requests, 100 KiB per file, 1 MiB decoded text in total
+and a 20-second scan budget within the backend analysis deadline. Coverage can be partial.
+
+Findings show masked excerpts, repository/path, line and revision plus review advice.
+Example/contributor contacts may be flagged; ownership and necessity of disclosure are
+not verified. Editing the latest file does not remove historical copies. Raw downloaded
+files are never saved, even with Retain extracted text; career scores/ML inputs remain
+independent. No files or profile settings are changed automatically.
+See the [decision record](docs/privacy/repository-file-scanning.md) for limits and
+the [delivery record](docs/improvements/id-9-delivery.md) for verification.
+
 ### Analysis recovery
 
 While another analysis runs, the previous successful report stays visible.

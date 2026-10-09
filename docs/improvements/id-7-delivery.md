@@ -1,9 +1,9 @@
 # ID 7: Analysis failure recovery and responsiveness
 
-Status: implemented on `fix/analysis-request-recovery`; awaiting user commit/review/merge.
+Status: merged from `fix/analysis-request-recovery` in PR #7 (`b7bc448`).
 Commit author: `charya19 <309141509+charya19@users.noreply.github.com>`.
 Starting commit: `1f25833`, verified merge of the preceding group in PR #6.
-This group's commit, PR and merge: pending.
+Implementation commit: `71c4553`; merge verified before starting ID 9.
 
 ## Problem and resulting behavior
 

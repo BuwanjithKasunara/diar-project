@@ -2,6 +2,7 @@ import json
 import os
 import re
 import logging
+import time
 from functools import partial
 import anyio
 from typing import Optional
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from . import database
-from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier, privacy_assessment, privacy
+from .modules import extraction, identity_construction, alignment_engine, recommendation_engine, explainable_ai, ml_classifier, privacy_assessment, privacy, repository_privacy
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 with open(os.path.join(DATA_DIR, "benchmarks.json")) as f:
@@ -105,6 +106,7 @@ async def analyze(
     linkedin_text: Optional[str] = Form(""),
     resume_publicly_shared: bool = Form(False),
     report_redaction: str = Form("mask_contacts"),
+    scan_repository_files: bool = Form(False),
     resume: Optional[UploadFile] = File(None),
     db: Session = Depends(database.get_db),
 ):
@@ -137,7 +139,7 @@ async def analyze(
             report_payload, stored_username = await anyio.to_thread.run_sync(
                 partial(_build_report, file_bytes, github_username, linkedin_text,
                         benchmark_identity, visibility_level, resume_publicly_shared,
-                        report_redaction), abandon_on_cancel=True,
+                        report_redaction, scan_repository_files), abandon_on_cancel=True,
             )
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Analysis took too long. No report was saved for this timed-out analysis. Try fewer sources or retry later.")
@@ -158,8 +160,9 @@ async def analyze(
 
 
 def _build_report(file_bytes, github_username, linkedin_text, benchmark_identity,
-                  visibility_level, resume_publicly_shared, report_redaction):
+                  visibility_level, resume_publicly_shared, report_redaction, scan_repository_files=False):
     """Build protected report data in a worker without accessing report storage."""
+    file_scan_deadline = time.monotonic() + ANALYSIS_TIMEOUT_SECONDS - 3
     # 1. Information Extraction Module
     resume_text = ""
     if file_bytes is not None:
@@ -173,7 +176,7 @@ def _build_report(file_bytes, github_username, linkedin_text, benchmark_identity
 
     github_data = {"skills": [], "languages": [], "repo_count": 0, "profile_complete": False}
     if github_username:
-        github_data = extraction.extract_from_github(github_username.strip())
+        github_data = extraction.extract_from_github(github_username.strip(), scan_repository_files=True, file_scan_deadline=file_scan_deadline) if scan_repository_files else extraction.extract_from_github(github_username.strip())
 
     linkedin_data = extraction.extract_from_linkedin_text(linkedin_text or "")
 
@@ -184,6 +187,7 @@ def _build_report(file_bytes, github_username, linkedin_text, benchmark_identity
     privacy_evidence = privacy_assessment.collect_privacy_evidence(
         resume_text, linkedin_text or "", github_data.get("privacy_data"),
         resume_publicly_shared=resume_publicly_shared,
+        repository_file_data=github_data.get("repository_file_privacy") or repository_privacy.empty_result(scan_repository_files, "unavailable" if scan_repository_files else "disabled"),
     )
     profile["public_contact_info_detected"] = any(
         item.get("kind") in ("email", "phone")

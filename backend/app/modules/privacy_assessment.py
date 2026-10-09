@@ -118,6 +118,7 @@ def _scan_field(text, source, location, exposure_status, evidence_prefix, limit)
             "detection_basis": certainty,
             "display_evidence": masked[excerpt_start:excerpt_start + MAX_EXCERPT_LENGTH],
             "recommendation_eligible": exposure_status != "application_document",
+            **({"line_number": text.count("\n", 0, start) + 1} if source == "github_repository_file" else {}),
         })
     return findings, total
 
@@ -195,7 +196,7 @@ def collect_github_privacy_data(profile=None, repositories=None, profile_state="
     }, GITHUB_LIMITATIONS)
 
 
-def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=None, resume_publicly_shared=False):
+def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=None, resume_publicly_shared=False, repository_file_data=None):
     """Combine full supplied texts with already masked GitHub evidence.
 
     A resume defaults to an application document and is not treated as a public
@@ -222,7 +223,22 @@ def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=Non
         "linkedin": {"status": "supplied_text_only" if linkedin_supplied else "not_supplied",
                      "audience_verified": False, "findings_count": linkedin_findings_count},
     })
-    return collector.result(coverage, [*github["limitations"],
+    limitations = list(github["limitations"])
+    if repository_file_data is not None:
+        file_coverage = copy.deepcopy(repository_file_data["coverage"])
+        coverage["github_repository_files"] = file_coverage
+        remaining = MAX_FINDINGS - len(collector.evidence)
+        collector.evidence.extend(copy.deepcopy(repository_file_data["evidence"][:remaining]))
+        collector.findings_count += repository_file_data["findings_count"]
+        if file_coverage.get("enabled"):
+            limitations = [text for text in limitations if text not in GITHUB_LIMITATIONS]
+            limitations.extend([
+                "GitHub metadata coverage is reported separately from the optional file review.",
+                "The optional file review covers only listed root README, CONTRIBUTING.md and SECURITY.md files in selected fetched public repositories.",
+                "Other files/folders, links, commit history, private repositories and account visibility settings were not inspected. Removing current file text does not remove historical copies.",
+                "Public file contact details may describe examples or contributors; ownership and whether disclosure is unnecessary were not verified.",
+            ])
+    return collector.result(coverage, [*limitations,
         "LinkedIn review covers supplied text only; its audience and account settings were not verified.",
         "A resume is application information unless the user declares that it is publicly shared.",
         "Address and birth-date detection supports only explicit labels or a structured street-location field; unusual formats can be missed.",
@@ -232,6 +248,7 @@ def collect_privacy_evidence(resume_text, linkedin_text, github_privacy_data=Non
 SOURCE_LABELS = {
     "github_profile": "GitHub profile",
     "github_repository": "GitHub repository metadata",
+    "github_repository_file": "public GitHub repository files",
     "linkedin": "LinkedIn text you supplied",
     "resume": "resume you marked publicly shared",
 }
@@ -248,13 +265,19 @@ def _recommendation_for_group(source, kind, status, evidence):
     kind_label = KIND_LABELS[kind]
     locations = sorted({item["location"] for item in evidence})
     location_label = ", ".join(locations)
-    if source == "github_repository":
+    if source in ("github_repository", "github_repository_file"):
         names = sorted({item["repository_name"] for item in evidence if item.get("repository_name")})
         target = f"{label} ({', '.join(names)})" if names else label
     else:
         target = label
 
-    if status == "supplied_text_unknown_audience":
+    if source == "github_repository_file":
+        files = sorted({f"{item.get('repository_name', 'repository')} / {item.get('file_path', item['location'])}: line {item.get('line_number', '?')}" for item in evidence})
+        reason = f"A {kind_label} pattern was found in current public file contents ({'; '.join(files)}). It may belong to an example or contributor. Review whether it needs to be public; ownership was not verified."
+        steps = ["Review the identified files and lines; confirm whether each match is real personal information.",
+                 "Remove or replace unnecessary details while retaining a suitable professional contact route.",
+                 "Editing the current file does not remove historical commits, forks or cached copies."]
+    elif status == "supplied_text_unknown_audience":
         reason = (
             f"A {kind_label} pattern was found in the {label} ({location_label}). "
             "DIAR has not verified the profile's audience. If this detail is visible publicly "
@@ -351,6 +374,9 @@ def assess_visibility(privacy_evidence, visibility_level):
         findings.append("Coverage: only fetched GitHub repository metadata was checked; more repositories may exist.")
     if privacy_evidence.get("omitted_findings_count", 0):
         findings.append(f"Only the first {len(evidence)} findings are included; {privacy_evidence['omitted_findings_count']} more were omitted from the report.")
+    file_coverage = coverage.get("github_repository_files")
+    if file_coverage and file_coverage.get("enabled"):
+        findings.append(f"Public file review: {file_coverage['status']} · {file_coverage.get('files_checked', 0)} files checked in {file_coverage.get('repositories_checked', 0)} repository trees. See checked/skipped coverage; this is not a whole-repository audit.")
     return {"findings": findings, "rules": rules, "evidence": evidence,
             "coverage": coverage,
             "limitations": privacy_evidence.get("limitations", []),

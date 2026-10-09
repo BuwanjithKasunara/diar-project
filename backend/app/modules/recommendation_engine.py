@@ -45,6 +45,7 @@ ACTION_LABELS = {
 EXPOSURE_LABELS = {
     "github_profile": "GitHub profile",
     "github_repository": "GitHub repository metadata",
+    "github_repository_file": "public GitHub repository files",
     "linkedin": "LinkedIn text you supplied",
     "resume": "resume you marked publicly shared",
 }

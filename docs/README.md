@@ -9,6 +9,9 @@
   [skill context](improvements/id-3-delivery.md).
 - [Analysis recovery and responsiveness](improvements/id-7-delivery.md): prior-report
   preservation, cancellation/deadline behavior, worker isolation and ML failure fallback.
+- [Repository file privacy decision](privacy/repository-file-scanning.md) and
+  [ID 9 delivery](improvements/id-9-delivery.md): bounded optional root-file review,
+  masked file/line evidence, coverage, transport limits and verification.
 - [Privacy requirement realignment](privacy/realignment.md): requirement misunderstanding,
   intended behavior, evidence limits, implementation stages, verification and rollback.
 - [Privacy implementation plan](privacy/implementation-plan.md): detailed specification

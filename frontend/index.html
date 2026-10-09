@@ -207,6 +207,7 @@ var state = {
   resumeFile: null,
   resumePubliclyShared: false,
   reportRedaction: "mask_contacts",
+  scanRepositoryFiles: false,
   confirmingDelete: false,
   deletingReport: false,
   deleteError: null,
@@ -390,7 +391,7 @@ function renderPrivacySummary(assessment, recommendations) {
   }
   var evidence = (assessment.evidence || []).filter(function (item) { return item.recommendation_eligible; });
   var kinds = { email: "Email address", phone: "Phone number", street_address: "Street address", date_of_birth: "Date of birth" };
-  var sources = { github_profile: "GitHub profile", github_repository: "GitHub repository metadata", linkedin: "LinkedIn text", resume: "Public resume copy" };
+  var sources = { github_profile: "GitHub profile", github_repository: "GitHub repository metadata", github_repository_file: "Public GitHub files", linkedin: "LinkedIn text", resume: "Public resume copy" };
   var groups = {};
   evidence.forEach(function (item) {
     var key = item.source + ":" + item.kind;
@@ -405,7 +406,10 @@ function renderPrivacySummary(assessment, recommendations) {
       if (item.kind === "phone" && items.every(function (entry) { return entry.detection_basis === "possible"; })) label = "Possible phone number";
       var detailPhrase = (item.kind === "email" ? "an " : "a ") + label.toLowerCase();
       var description, provenance;
-      if (item.source === "linkedin") {
+      if (item.source === "github_repository_file") {
+        description = "This detail appears in a checked public repository file. Review the file and line in the evidence; it may describe an example or contributor. Remove or replace unnecessary personal information. Editing the current file does not remove historical copies.";
+        provenance = "Observed in public file contents; ownership not verified";
+      } else if (item.source === "linkedin") {
         description = "Your supplied LinkedIn text includes " + detailPhrase + ". Check who can see it on LinkedIn. If it is public and unnecessary, remove it or limit its audience.";
         provenance = "Audience not verified";
       } else if (item.source === "resume") {
@@ -514,12 +518,12 @@ function renderReport(report) {
   if (va.assessment_version === 2) {
     var evidenceContent = [h2("", "Exposure evidence and coverage")];
     (va.evidence || []).forEach(function (item) {
-      var provenance = { observed_public: "Observed in public GitHub metadata", supplied_text_unknown_audience: "Supplied text; audience unknown", user_declared_public: "Public copy declared by user" };
+      var provenance = { observed_public: item.source === "github_repository_file" ? "Observed in public file contents; ownership not verified" : "Observed in public GitHub metadata", supplied_text_unknown_audience: "Supplied text; audience unknown", user_declared_public: "Public copy declared by user" };
       evidenceContent.push(el("div", { class: "visibility-note" }, [
         el("strong", {}, [item.source + (item.repository_name ? " / " + item.repository_name : "") + " / " + item.location]),
         el("div", {}, [provenance[item.exposure_status] || item.exposure_status]),
         el("div", {}, [item.display_evidence]),
-        el("div", { class: "hint" }, ["Evidence: " + item.id + " · " + item.kind + " · " + item.detection_basis])
+        el("div", { class: "hint" }, ["Evidence: " + item.id + " · " + item.kind + " · " + item.detection_basis + (item.line_number ? " · Line " + item.line_number : "") + (item.revision ? " · Revision " + item.revision.slice(0, 12) : "")])
       ]));
     });
     Object.keys(va.coverage || {}).forEach(function (source) {
@@ -527,6 +531,13 @@ function renderReport(report) {
       evidenceContent.push(el("div", { class: "hint" }, [source + ": " + coverage.status +
         (coverage.repositories_checked !== undefined ? " · " + coverage.repositories_checked + " repositories checked" : "") +
         (coverage.checked_fields && (coverage.status === "checked" || coverage.status === "limited") ? " · Fields: " + coverage.checked_fields.join(", ") : "")]));
+      if (source === "github_repository_files") {
+        evidenceContent.push(el("div", { class: "hint" }, ["Files checked: " + (coverage.files_checked || 0) + " · Extra requests: " + (coverage.requests_used || 0) + (coverage.stop_reason ? " · Stopped: " + coverage.stop_reason : "")]));
+        (coverage.repositories || []).forEach(function (repo) {
+          evidenceContent.push(el("div", { class: "hint" }, [repo.repository_name + ": " + repo.status + (repo.reason ? " · " + repo.reason : "") + (repo.revision ? " · Revision " + repo.revision.slice(0, 12) : "")]));
+          (repo.files || []).forEach(function (file) { evidenceContent.push(el("div", { class: "hint" }, [file.path + ": " + file.status + (file.reason ? " · " + file.reason : "")])); });
+        });
+      }
     });
     (va.limitations || []).forEach(function (text) { evidenceContent.push(el("div", { class: "hint" }, [text])); });
     var evidencePanel = panel(evidenceContent);
@@ -730,6 +741,7 @@ async function runAnalysis(e) {
     if (state.resumeFile) form.append("resume", state.resumeFile);
     form.append("resume_publicly_shared", state.resumePubliclyShared ? "true" : "false");
     form.append("report_redaction", state.reportRedaction);
+    form.append("scan_repository_files", state.scanRepositoryFiles ? "true" : "false");
 
     var res = await fetch(API_BASE + "/api/analyze", { method: "POST", body: form, signal: controller.signal });
     if (!res.ok) {
@@ -824,6 +836,11 @@ function buildLayout() {
       onInput: function (e) { state.githubUsername = e.target.value; }
     }, []),
     el("div", { class: "hint" }, ["Pulled live from the public GitHub API — repos, languages, activity."]),
+    el("label", { class: "resume-public-toggle" }, [
+      el("input", { type: "checkbox", onChange: function (e) { state.scanRepositoryFiles = e.target.checked; } }, []),
+      el("span", {}, ["Also review public README and supported root text files"])
+    ]),
+    el("div", { class: "hint" }, ["Optional: up to 5 fetched public repositories, including forks, and 3 files each. Checks root README, CONTRIBUTING.md and SECURITY.md; skips history and other files. Adds limited network requests and may return partial coverage."]),
 
     el("label", { for: "linkedin-input" }, ["LinkedIn Profile Text"]),
     el("textarea", {
