@@ -1,12 +1,11 @@
-fastapi
-anyio
-uvicorn[standard]
-python-multipart
-pymupdf
-sqlalchemy
-pydantic
-requests
-scikit-learn
-joblib
-pytest
-httpx
+# Direct runtime dependencies, verified with Python 3.12.
+fastapi==0.142.4
+anyio==4.15.1
+uvicorn==0.54.0
+python-multipart==0.0.32
+pymupdf==1.28.2
+sqlalchemy==2.1.4
+pydantic==2.13.5
+requests==2.34.2
+scikit-learn==1.9.1
+joblib==1.6.0

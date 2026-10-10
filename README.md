@@ -23,7 +23,7 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 **Machine Learning Component & Dataset:**
 - **Dataset (`backend/app/data/career_profiles_dataset.csv`)**: Contains labeled profile and resume descriptions spanning all 5 benchmark professional identities (*AI Engineer*, *Data Scientist*, *Software Engineer*, *Researcher*, *Entrepreneur*).
 - **ML Pipeline**: Employs an n-gram TF-IDF vectorizer paired with a multinomial logistic regression classifier trained with `scikit-learn`.
-- **Training & Evaluation Script (`backend/train_ml_model.py`)**: Can be run directly to evaluate 5-fold cross-validation performance (97%+ accuracy) and export the trained model artifact (`backend/app/data/career_classifier.joblib`).
+- **Training & Evaluation Script (`backend/train_ml_model.py`)**: Can be run directly to evaluate 5-fold cross-validation and a seeded holdout split, saving a [dated evaluation record](docs/testing/model-evaluation.json). `--save-model` explicitly replaces the local trained artifact. Results on this repository dataset do not establish real-profile accuracy.
 - **Prediction Output**: Provides a role prediction, model probabilities and matching vocabulary ranked by TF-IDF weight. Vocabulary matches are not measured class contributions, and probabilities are not calibrated confidence. Empty/unmatched vocabulary receives an insufficient-evidence result; model failures preserve rule analysis. No evaluated abstention threshold is used.
 
 **Note on scope / simplifications made to get a runnable prototype:**
@@ -60,7 +60,7 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
   LinkedIn text. LinkedIn audience/settings are not verified. Resume contact information is treated as
   job-application information unless the user marks that copy publicly available. Results show masked
   evidence and scan coverage; a metadata scan is not a complete account or repository-file audit.
-- **Frontend**: Plain JavaScript in a single `index.html`, with no npm/build step.
+- **Frontend**: Plain JavaScript (`index.html` and `report-review.js`), with no npm/build step.
 
 ## Setup & Running
 
@@ -89,7 +89,7 @@ The browser has a 45-second timeout, and backend report construction has a
 40-second deadline after upload validation. Backend deadline errors do not save
 a report, but browser cancellation/network failure may occur while the server
 continues and saves one. Check `/api/reports` before retrying if needed; automatic
-retries are not performed. Saved-report history UI is planned separately.
+retries are not performed. Use the Saved reports panel to check history.
 If ML prediction fails, DIAR still returns its available rule-based analysis.
 See the [recovery delivery record](docs/improvements/id-7-delivery.md) for limits.
 
@@ -113,7 +113,9 @@ records in [the documentation index](docs/README.md) for scope and verification.
 
 ### Backend (.venv Environment Setup)
 
-We recommend using a Python virtual environment (`.venv`) to isolate dependencies:
+Verified environment: **Python 3.12.10**, Windows. CI uses the same Python version on Ubuntu (remote run pending until push). Use `requirements-lock.txt` for the full runtime/development stack; `requirements.txt` pins direct runtime dependencies and `requirements-dev.txt` adds test dependencies. The lock was resolved in a fresh environment, including transitive versions.
+
+Use a Python virtual environment (`.venv`) to isolate dependencies:
 
 1. **Create and activate the virtual environment:**
    - **Windows (PowerShell):**
@@ -130,13 +132,14 @@ We recommend using a Python virtual environment (`.venv`) to isolate dependencie
 2. **Install dependencies:**
    ```bash
    cd backend
-   pip install -r requirements.txt
+   python -m pip install -r requirements-lock.txt
    ```
 
 3. **Run tests and launch the backend:**
    ```bash
    python -m pytest tests -v                    # Run the full automated regression suite
-   python train_ml_model.py                     # Optional: re-train/evaluate ML classifier
+   python train_ml_model.py                     # Evaluate and record metrics
+   python train_ml_model.py --save-model        # Optional: also replace local model
    python -m uvicorn app.main:app --reload --port 8000
    ```
    > **Note on `.venv`:** The `.venv` directory contains machine-specific installed packages and is intentionally excluded from Git via `.gitignore`. Anyone cloning this repository can recreate it anytime by following the steps above.
@@ -149,7 +152,7 @@ Fully Public supports an intentional professional presence; Semi-Public supports
 public work; Privacy Focused offers private portfolio development and selective sharing.
 The exposure review supports email/phone patterns, explicitly labelled street addresses and
 dates of birth. It checks public GitHub metadata and supplied LinkedIn text, with masked
-evidence and coverage limits. It does not inspect repository files or verify account settings.
+evidence and coverage limits. Optional bounded root-file review is available; account settings remain unverified.
 
 Saved report protection is selected independently:
 
@@ -213,7 +216,7 @@ then visit http://localhost:5173
 
 See [project documentation](docs/README.md), including the privacy requirement
 realignment record and staged implementation plan. The evidence foundation is Part 1;
-source-specific recommendations and independent report controls are planned follow-ups.
+source-specific recommendations and independent report controls are implemented.
 
 ## Extending
 
@@ -250,3 +253,20 @@ under All and Legacy / uncategorized; they are not silently reclassified.
 History has no authentication or report ownership and is intended for local use.
 Shared hosting requires separately planned access control. Print styling is
 provided; native print dialog/PDF output has not yet been visually verified.
+
+## Reproducible verification
+
+From `backend`, run `python -m pip check` then `python -m pytest tests -q`.
+The suite blocks real requests HTTP calls, uses temporary SQLite databases, and
+trains its model from the repository CSV into temporary storage. No credentials,
+profile requests or external model downloads are required after package install.
+GitHub Actions repeats installation, dependency checks, regression tests and
+`python train_ml_model.py --output evaluation-ci.json` on main pushes and PRs.
+
+See [model evaluation and dataset limits](docs/testing/model-evaluation.md).
+The dataset's original source, consent and license are unknown. Evaluation removes
+normalized exact duplicates before splitting, records class counts and split indices,
+and screens holdout near duplicates; shared templates and semantic leakage remain
+possible. Probabilities are not calibrated confidence. A missing model is trained
+locally from the CSV on first use; failed load/training leaves rule analysis available.
+The evaluation command writes metrics only unless `--save-model` is supplied.
