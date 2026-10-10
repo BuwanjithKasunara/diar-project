@@ -155,7 +155,7 @@ async def analyze(
     db.commit()
     db.refresh(db_report)
 
-    return {"id": db_report.id, **report_payload}
+    return {"id": db_report.id, "created_at": db_report.created_at.isoformat(), **report_payload}
 
 
 
@@ -268,6 +268,8 @@ def list_reports(db: Session = Depends(database.get_db)):
             "created_at": r.created_at.isoformat(),
             "report_metadata": {"report_redaction": policy},
         }, policy, r.github_username)
+        # This is a server-generated timestamp, not profile contact evidence.
+        item["created_at"] = r.created_at.isoformat()
         history.append(item)
     return history
 

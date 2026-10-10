@@ -224,3 +224,29 @@ source-specific recommendations and independent report controls are planned foll
 - Add a rule: add a block to `backend/app/modules/alignment_engine.py`'s `run_alignment()` and give it
   a unique rule id / priority / reason — it flows automatically through the recommendation engine and
   into the explanation summary.
+
+## Review and export saved reports
+
+The Saved reports panel lists the latest 50 reports in this local prototype.
+Refresh the list and open a report after refreshing the page. Opening uses the
+saved protected response, does not reanalyse it, and does not replace form inputs.
+Loading and failed requests keep the previous report available; report actions
+are disabled while another report is opening or analysis/deletion is running.
+
+Export JSON downloads the displayed report under its stored protection policy.
+The filename contains only its report ID. Print report / Save PDF uses your
+browser's print dialog and includes the full recommendation list even when the
+screen is filtered. Exports include benchmark, creation time, protection metadata,
+coverage and recorded scan limitations. Retained-text exports may contain personal
+information. Deleting a saved row does not erase downloads, backups or source data.
+
+Filter recommendations by career, privacy or legacy/uncategorized actions and
+priority. Original ranks remain unchanged. Suggested first steps use the existing
+first three ranked actions. Repository-file actions have a separate shortcut list;
+privacy-card links reveal actions hidden by filters. Recommendation evidence links
+jump to the recorded evidence. Historical actions without categories stay visible
+under All and Legacy / uncategorized; they are not silently reclassified.
+
+History has no authentication or report ownership and is intended for local use.
+Shared hosting requires separately planned access control. Print styling is
+provided; native print dialog/PDF output has not yet been visually verified.

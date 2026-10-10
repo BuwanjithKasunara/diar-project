@@ -18,6 +18,18 @@ def _rule(action, priority="high", rule_id="test-rule"):
     }
 
 
+def test_navigation_categories_preserve_ranking_and_visibility_evidence():
+    career = _rule("develop_skill:python", "high", "career-test")
+    privacy = {**_rule("review_privacy_detail", "medium", "privacy-test"),
+               "category": "visibility", "source": "github_repository_file",
+               "evidence_ids": ["synthetic-evidence"]}
+    result = generate_recommendations([privacy, career])
+    assert [rec["rule_id"] for rec in result] == ["career-test", "privacy-test"]
+    assert result[0]["category"] == "career"
+    assert result[1]["category"] == "visibility"
+    assert result[1]["evidence_ids"] == ["synthetic-evidence"]
+
+
 @pytest.mark.parametrize(
     "action, expected",
     [

@@ -1,6 +1,6 @@
 # ID 4: ML uncertainty and explanations
 
-Status: implemented and verified on `fix/ml-prediction-evidence`; uncommitted.
+Status: merged in PR #9; implementation commit `097169a`, verified merge `cb18bbe`.
 Author: `raveesha2002 <208922648+raveesha2002@users.noreply.github.com>`.
 Starting commit: `bc95c0376f3714b0a561cb361f9bfba6d38a7f23` (PR #8 merged).
 
