@@ -117,11 +117,13 @@ def test_new_report_response_storage_and_history_follow_same_policy(saved_report
     assert payload["digital_identity_profile"]["public_contact_info_detected"] is True
     with sessions() as session:
         row = session.get(database.Report, payload["id"])
+        assert payload["created_at"] == row.created_at.isoformat()
         stored = json.loads(row.report_json)
-        assert stored == {key: value for key, value in payload.items() if key != "id"}
+        assert stored == {key: value for key, value in payload.items() if key not in ("id", "created_at")}
         assert row.github_username == expected_username
         assert ("person@example.com" in row.report_json) == (policy == "none")
     history = client.get("/api/reports").json()
+    assert history[0]["created_at"] == payload["created_at"]
     assert history[0]["github_username"] == expected_username
     loaded = client.get(f"/api/reports/{payload['id']}").json()
     assert {key: value for key, value in loaded.items() if key not in ("id", "created_at")} == stored

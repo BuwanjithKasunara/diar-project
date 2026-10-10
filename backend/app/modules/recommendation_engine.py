@@ -97,6 +97,7 @@ def generate_recommendations(fired_rules: list) -> list:
             "recommendation": _label_for(action),
             "rule_id": rule.get("id"),
             "explanation": rule.get("reason"),
+            "category": rule.get("category", "career"),
             **{key: rule[key] for key in ("category", "source", "evidence_ids", "suggested_steps") if key in rule},
         })
         rank += 1
