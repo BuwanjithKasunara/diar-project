@@ -93,7 +93,7 @@ def test_worker_never_receives_a_database_session(api, monkeypatch):
     client, _ = api
     original = main._build_report
     def inspected(*args):
-        assert len(args) == 7
+        assert len(args) == 8
         assert not any(isinstance(item, database.SessionLocal.class_) for item in args)
         return original(*args)
     monkeypatch.setattr(main, "_build_report", inspected)

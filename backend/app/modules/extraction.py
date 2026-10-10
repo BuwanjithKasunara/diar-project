@@ -34,7 +34,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from collections import defaultdict, Counter
 import fitz  # PyMuPDF
 import requests
-from . import privacy_assessment
+from . import privacy_assessment, repository_privacy
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -334,7 +334,8 @@ def _github_failure(username: str, source_state: str, error: str) -> dict:
     }
 
 
-def extract_from_github(username: str, github_token: Optional[str] = None) -> dict:
+def extract_from_github(username: str, github_token: Optional[str] = None,
+                        scan_repository_files=False, file_scan_deadline=None) -> dict:
     """
     Pulls public profile + repo data from the GitHub REST API.
     Evaluates repository recency (decay based on days elapsed) and domain relevance.
@@ -414,6 +415,7 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
         profile=profile, repositories=repos, repository_state=repository_state,
         repository_coverage=repository_coverage,
     )
+    repository_file_data = repository_privacy.scan_public_files(repos, file_scan_deadline) if scan_repository_files else None
 
     # Dynamic Recency Analysis (days elapsed rather than static year)
     now = datetime.now(timezone.utc)
@@ -453,6 +455,7 @@ def extract_from_github(username: str, github_token: Optional[str] = None) -> di
         "repository_state": repository_state,
         "repository_coverage": repository_coverage,
         "privacy_data": privacy_data,
+        **({"repository_file_privacy": repository_file_data} if repository_file_data is not None else {}),
         "repositories_fetched_count": len(repos),
         "error": warning,
         "username": clean_user,

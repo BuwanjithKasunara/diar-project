@@ -60,11 +60,18 @@ An email is a review candidate, not proof that it is a personal address or a vul
 
 The [incremental improvements plan](../improvements/implementation-plan.md) adds
 improvement 9: optional, bounded privacy scanning of current public README and
-allowlisted text files. This extension is planned, not implemented. The original
+allowlisted text files. Its current delivery status is recorded below. The original
 metadata-only scope and its verification remain the historical baseline. The new
 stage requires a separate decision record, masked file/line evidence, explicit
 coverage and network limits, and verification that career analysis remains independent.
 It precedes the report-history and recommendation-navigation UI improvements.
+
+Update 2026-10-09: improvement 9 is now implemented on
+`feat/repository-file-privacy`, awaiting user commit/review/merge. The
+[file-scanning decision record](repository-file-scanning.md) and
+[delivery record](../improvements/id-9-delivery.md) describe the optional root-file
+scope, limits, ownership uncertainty, compatibility and verification. Earlier
+metadata-only reports retain their recorded coverage and are not rescanned.
 
 | Part | Author | Branch | Status |
 |---|---|---|---|
