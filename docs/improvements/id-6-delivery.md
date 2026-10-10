@@ -1,9 +1,9 @@
 # ID 6: Recommendation navigation
 
-Status: implemented and verified on `feat/report-review-navigation`; uncommitted.
+Status: merged in PR #10; implementation `c53cece`, verified merge `0995ec3`.
 Author: `charya19 <309141509+charya19@users.noreply.github.com>`.
 Starting commit: `cb18bbe8231c181c91be95def4ff2ccfbde66b88` (PR #9 merge).
-PR/implementation commit: pending user commands. IDs 5 and 6 share one PR.
+IDs 5 and 6 share PR #10.
 
 Final behavior: Category and priority filters preserve original ordering/ranks. First steps use the first three existing ranked actions; public repository file actions get shortcuts. Hidden targets are revealed before navigation and evidence links point to recorded evidence. New career actions get an additive career category; existing visibility categories map to privacy in the UI and uncategorized historical actions remain legacy.
 

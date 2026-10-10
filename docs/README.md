@@ -19,3 +19,9 @@
 
 Update the realignment record when each part is implemented and merged. Planned behavior
 must remain labelled as planned until its implementation is verified.
+
+- [ML prediction evidence](improvements/id-4-delivery.md).
+- [Saved report history/export](improvements/id-5-delivery.md) and
+  [recommendation navigation](improvements/id-6-delivery.md).
+- [Reproducible setup delivery](improvements/id-8-delivery.md) and
+  [dataset/evaluation record](testing/model-evaluation.md).

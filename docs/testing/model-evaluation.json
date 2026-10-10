@@ -1,0 +1,229 @@
+{
+  "evaluated_at_utc": "2026-10-10T20:01:37.839836+00:00",
+  "dataset_sha256": "9182020e17af7b8537e37a532048b8d3b3a131186e948dedc6a0a6e49185e50f",
+  "dataset_source": "Repository CSV; original source and collection method unknown",
+  "dataset_license": "Unknown; no dataset-specific license evidence found",
+  "python_version": "3.12.10",
+  "packages": {
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "joblib": "1.6.0"
+  },
+  "seed": 42,
+  "raw_rows": 75,
+  "unique_rows": 75,
+  "class_counts": {
+    "AI Engineer": 15,
+    "Data Scientist": 15,
+    "Entrepreneur": 15,
+    "Researcher": 15,
+    "Software Engineer": 15
+  },
+  "normalized_duplicates_removed": 0,
+  "conflicting_duplicate_labels": 0,
+  "holdout": {
+    "train_count": 60,
+    "test_count": 15,
+    "train_indices": [
+      24,
+      27,
+      63,
+      50,
+      31,
+      58,
+      11,
+      17,
+      56,
+      40,
+      19,
+      64,
+      67,
+      22,
+      46,
+      23,
+      5,
+      70,
+      33,
+      0,
+      47,
+      39,
+      41,
+      7,
+      68,
+      57,
+      10,
+      62,
+      52,
+      14,
+      2,
+      25,
+      9,
+      48,
+      15,
+      61,
+      29,
+      35,
+      20,
+      38,
+      43,
+      45,
+      34,
+      59,
+      1,
+      30,
+      66,
+      42,
+      74,
+      4,
+      60,
+      54,
+      72,
+      36,
+      73,
+      21,
+      13,
+      55,
+      28,
+      8
+    ],
+    "test_indices": [
+      69,
+      32,
+      71,
+      53,
+      49,
+      37,
+      65,
+      3,
+      51,
+      18,
+      26,
+      44,
+      16,
+      12,
+      6
+    ],
+    "exact_text_overlap": 0,
+    "near_duplicate_pairs_at_0_9": 0,
+    "accuracy": 1.0,
+    "classification_report": {
+      "AI Engineer": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 3.0
+      },
+      "Data Scientist": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 3.0
+      },
+      "Entrepreneur": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 3.0
+      },
+      "Researcher": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 3.0
+      },
+      "Software Engineer": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 3.0
+      },
+      "accuracy": 1.0,
+      "macro avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 15.0
+      },
+      "weighted avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 15.0
+      }
+    },
+    "confusion_matrix_labels": [
+      "AI Engineer",
+      "Data Scientist",
+      "Entrepreneur",
+      "Researcher",
+      "Software Engineer"
+    ],
+    "confusion_matrix": [
+      [
+        3,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        3,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        3,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        3,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        3
+      ]
+    ]
+  },
+  "cross_validation": {
+    "method": "5-fold stratified, shuffled; vectorizer fitted inside each fold",
+    "scores": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.9333333333333333
+    ],
+    "mean": 0.9866666666666667,
+    "std": 0.02666666666666666
+  },
+  "configuration": {
+    "ngram_range": [
+      1,
+      2
+    ],
+    "stop_words": "english",
+    "max_features": 4000,
+    "sublinear_tf": true,
+    "C": 1.5,
+    "max_iter": 1000
+  },
+  "limits": [
+    "In-dataset results do not establish accuracy on real profiles or calibrated confidence.",
+    "Exact duplicates are removed before splitting. Character similarity >=0.9 screens train/test near duplicates; semantic/template leakage and shared authors are not ruled out.",
+    "Original provenance, consent, license and representativeness remain unverified.",
+    "No low-probability abstention threshold is selected from this evaluation."
+  ]
+}

@@ -1,6 +1,6 @@
 # DIAR incremental improvements plan
 
-Status: groups 1–4 merged; IDs 5–6 implemented and verified on branch, awaiting user commit/review/merge.
+Status: groups 1–5 merged; ID 8 implemented and verified on branch; awaiting user commit/review/merge.
 Prepared: 2026-10-08.
 Repository: https://github.com/BuwanjithKasunara/diar-project
 Working copy: `C:\Projects\diar\diar-project-main`.
@@ -57,8 +57,8 @@ alternate authors. IDs 1–4 belong to raveesha; IDs 5–9 belong to charya.
 | 2 | 7 | Failure recovery/responsiveness | `fix/analysis-request-recovery` | charya19 | Merged in PR #7 (`b7bc448`) |
 | 3 | 9 | Public repository file privacy scan | `feat/repository-file-privacy` | charya19 | Merged in PR #8 (`bc95c03`) |
 | 4 | 4 | ML uncertainty/explanations | `fix/ml-prediction-evidence` | raveesha2002 | Merged in PR #9 (`cb18bbe`) |
-| 5 | 5, 6 | Saved report history/export and recommendation navigation | `feat/report-review-navigation` | charya19 | Implemented and verified; uncommitted |
-| 6 | 8 | Reproducible setup/verification | `chore/reproducible-project-setup` | charya19 | Planned |
+| 5 | 5, 6 | Saved report history/export and recommendation navigation | `feat/report-review-navigation` | charya19 | Merged in PR #10 (`0995ec3`) |
+| 6 | 8 | Reproducible setup/verification | `chore/reproducible-project-setup` | charya19 | Implemented and verified; uncommitted |
 
 Group 1 starts from verified merged main commit `0839edd` (privacy PR #5).
 Uncommitted planning documentation was carried into this group without discarding

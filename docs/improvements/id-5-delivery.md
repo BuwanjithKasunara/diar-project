@@ -1,9 +1,9 @@
 # ID 5: Saved report history and export
 
-Status: implemented and verified on `feat/report-review-navigation`; uncommitted.
+Status: merged in PR #10; implementation `c53cece`, verified merge `0995ec3`.
 Author: `charya19 <309141509+charya19@users.noreply.github.com>`.
 Starting commit: `cb18bbe8231c181c91be95def4ff2ccfbde66b88` (PR #9 merge).
-PR/implementation commit: pending user commands. IDs 5 and 6 share one PR.
+IDs 5 and 6 share PR #10.
 
 Final behavior: Latest-50 local history with refresh/loading/empty/failure states, protected reopening, JSON export, print styling and confirmation-based deletion. Creation timestamps are now returned for new reports and history preserves server timestamps outside contact masking.
 
