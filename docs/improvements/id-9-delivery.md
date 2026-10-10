@@ -1,9 +1,9 @@
 # ID 9: Public repository file privacy scanning
 
-Status: implemented on `feat/repository-file-privacy`; awaiting user commit/review/merge.
+Status: merged in PR #8 on `feat/repository-file-privacy`.
 Commit author: `charya19 <309141509+charya19@users.noreply.github.com>`.
 Starting commit: `b7bc448` (verified merge of improvement 7 in PR #7).
-This stage's implementation commit, PR and merge: pending.
+Implementation commit: `4099c76`; PR #8; verified merge commit: `bc95c03`.
 
 ## Problem, final behavior and components
 

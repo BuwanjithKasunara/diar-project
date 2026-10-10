@@ -58,17 +58,13 @@ def build_explanation_summary(profile: dict, benchmark_name: str, gap_analysis: 
             f"Context-aware NLP filtered out {len(negated)} explicitly negated skill(s) ({', '.join(negated[:3])}) to prevent false positive matching."
         )
 
-    if ml_prediction and ml_prediction.get("model_available"):
-        pred_role = ml_prediction.get("predicted_role")
-        conf = (ml_prediction.get("confidence") or 0.0) * 100
-        if ml_prediction.get("matches_target"):
-            narrative_parts.append(
-                f"The Supervised Machine Learning classifier confirms alignment, predicting your profile aligns with '{pred_role}' ({conf:.1f}% confidence)."
-            )
-        elif pred_role and pred_role != "Undetermined":
-            narrative_parts.append(
-                f"The Supervised Machine Learning classifier evaluated your profile text and predicted closest alignment with '{pred_role}' ({conf:.1f}% confidence) rather than '{benchmark_name}', indicating an opportunity to highlight more benchmark-specific skills and project terms."
-            )
+    if ml_prediction:
+        role = ml_prediction.get("predicted_role")
+        if ml_prediction.get("prediction_status") in {"insufficient_evidence", "unavailable"} or not ml_prediction.get("model_available"):
+            narrative_parts.append(ml_prediction.get("note") or "ML role analysis unavailable.")
+        elif role and role != "Undetermined":
+            probability = (ml_prediction.get("confidence") or 0.0) * 100
+            narrative_parts.append(f"The ML classifier ranks '{role}' highest ({probability:.1f}% model probability). This is not calibrated confidence or confirmation of career suitability.")
 
     if visibility_assessment.get("findings"):
         narrative_parts.append(

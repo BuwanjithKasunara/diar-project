@@ -24,7 +24,7 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 - **Dataset (`backend/app/data/career_profiles_dataset.csv`)**: Contains labeled profile and resume descriptions spanning all 5 benchmark professional identities (*AI Engineer*, *Data Scientist*, *Software Engineer*, *Researcher*, *Entrepreneur*).
 - **ML Pipeline**: Employs an n-gram TF-IDF vectorizer paired with a multinomial logistic regression classifier trained with `scikit-learn`.
 - **Training & Evaluation Script (`backend/train_ml_model.py`)**: Can be run directly to evaluate 5-fold cross-validation performance (97%+ accuracy) and export the trained model artifact (`backend/app/data/career_classifier.joblib`).
-- **Prediction Output**: Provides a role prediction, confidence percentage, probability distribution across all roles, and textual feature tokens driving the prediction.
+- **Prediction Output**: Provides a role prediction, model probabilities and matching vocabulary ranked by TF-IDF weight. Vocabulary matches are not measured class contributions, and probabilities are not calibrated confidence. Empty/unmatched vocabulary receives an insufficient-evidence result; model failures preserve rule analysis. No evaluated abstention threshold is used.
 
 **Note on scope / simplifications made to get a runnable prototype:**
 - **NLP module**: implemented as a fast, fully explainable dictionary-driven text classifier
