@@ -1,15 +1,15 @@
 """
 Machine Learning Role Classification Module
 -------------------------------------------
-Uses Natural Language Processing (TF-IDF Vectorization) and a calibrated
+Uses Natural Language Processing (TF-IDF Vectorization) and a
 Supervised Machine Learning Classifier (Logistic Regression / Multinomial Softmax)
 trained on a benchmark dataset of professional profiles and resumes.
 
 Given a user's consolidated profile text, this module:
 1. Predicts the closest benchmark professional identity (AI Engineer, Data Scientist,
    Software Engineer, Researcher, Entrepreneur).
-2. Computes the prediction confidence score and probability distribution across all roles.
-3. Identifies the primary keywords/features driving the prediction.
+2. Computes model probabilities across roles; calibration has not been established.
+3. Lists matching vocabulary, ranked by TF-IDF weight, without claiming class contributions.
 """
 import os
 import csv
@@ -126,67 +126,46 @@ def _get_model_unlocked():
     return train_model(save=True)
 
 
+def _no_prediction(status, note, available=False):
+    return {"model_available": available, "prediction_status": status,
+            "predicted_role": "Undetermined" if status == "insufficient_evidence" else "Unavailable",
+            "confidence": 0.0, "probabilities": {}, "matches_target": False,
+            "top_features": [], "target_benchmark_probability": None,
+            "feature_explanation_method": "matching_vocabulary", "note": note}
+
+
 def predict_role(text: str, target_benchmark: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Analyzes profile/resume text with the ML model and returns:
-    - predicted_role
-    - confidence (0.0 to 1.0)
-    - probabilities for all classes
-    - matches_target (boolean comparing prediction to target_benchmark)
-    - top_features (indicative words found in the text)
+    """Probabilities are not calibrated confidence; features are matching vocabulary.
+
+    Active terms are ranked by TF-IDF weight, then name, not class contributions.
     """
     cleaned_text = (text or "").strip()
     if not cleaned_text:
-        return {
-            "model_available": True,
-            "predicted_role": "Undetermined",
-            "confidence": 0.0,
-            "probabilities": {},
-            "matches_target": False,
-            "top_features": [],
-            "note": "No text provided for Machine Learning role analysis."
-        }
-
-    model = get_model()
-    if model is None:
-        return {
-            "model_available": False,
-            "predicted_role": "Unavailable",
-            "confidence": 0.0,
-            "probabilities": {},
-            "matches_target": False,
-            "top_features": [],
-            "note": "Machine Learning model is not loaded (scikit-learn required)."
-        }
-
-    classes = list(model.classes_)
-    probs = model.predict_proba([cleaned_text])[0]
-    prob_dict = {cls_name: round(float(prob), 4) for cls_name, prob in zip(classes, probs)}
-    # Sort probabilities descending
-    sorted_probs = dict(sorted(prob_dict.items(), key=lambda item: item[1], reverse=True))
-
-    predicted_role = model.predict([cleaned_text])[0]
-    confidence = round(float(max(probs)), 4)
-
-    # Extract top keywords from the text that match the vectorizer vocabulary
-    top_features = []
+        return _no_prediction("insufficient_evidence", "No text supplied for ML role analysis.")
     try:
+        model = get_model()
+        if model is None:
+            return _no_prediction("unavailable", "ML model unavailable; rule analysis remains available.")
         vectorizer = model.named_steps["tfidf"]
-        feature_names = set(vectorizer.get_feature_names_out())
-        words_in_text = [w.lower() for w in cleaned_text.split() if len(w) > 2]
-        matched_tokens = [w for w in set(words_in_text) if w in feature_names]
-        top_features = matched_tokens[:8]
+        vector = vectorizer.transform([cleaned_text])
+        if vector.nnz == 0:
+            return _no_prediction("insufficient_evidence", "No trained model vocabulary matched; no role is assigned.", True)
+        names = vectorizer.get_feature_names_out()
+        weighted = [(str(names[i]), float(w)) for i, w in zip(vector.indices, vector.data)]
+        features = [name for name, weight in sorted(weighted, key=lambda item: (-item[1], item[0]))[:8]]
+        classes = [str(value) for value in model.classes_]
+        probs = model.predict_proba([cleaned_text])[0]
+        winner = max(range(len(classes)), key=lambda i: float(probs[i]))
+        role = classes[winner]
+        distribution = {name: round(float(prob), 4) for name, prob in zip(classes, probs)}
+        target = next((name for name in classes if target_benchmark and name.casefold() == target_benchmark.casefold()), None)
+        return {"model_available": True, "prediction_status": "predicted",
+                "predicted_role": role, "confidence": distribution[role],
+                "probabilities": dict(sorted(distribution.items(), key=lambda item: (-item[1], item[0]))),
+                "matches_target": target == role, "top_features": features,
+                "feature_explanation_method": "matching_vocabulary",
+                "target_benchmark_probability": distribution.get(target) if target else None,
+                "note": "Model probabilities are not calibrated confidence or proof of career suitability. Matching vocabulary is not measured class contributions. No evaluated abstention threshold is available; mixed or unfamiliar profiles may be unreliable."}
     except Exception:
-        top_features = []
-
-    matches_target = bool(target_benchmark and target_benchmark.lower() == predicted_role.lower())
-
-    return {
-        "model_available": True,
-        "predicted_role": predicted_role,
-        "confidence": confidence,
-        "probabilities": sorted_probs,
-        "matches_target": matches_target,
-        "top_features": top_features,
-        "target_benchmark_probability": sorted_probs.get(target_benchmark, 0.0) if target_benchmark else None,
-    }
+        logger.warning("ML role analysis unavailable.")
+        return _no_prediction("unavailable", "ML model could not be loaded, trained or used; rule analysis remains available.")

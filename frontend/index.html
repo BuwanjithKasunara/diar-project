@@ -319,7 +319,7 @@ function subhead(text) {
 }
 
 function renderMlPrediction(ml, targetBenchmark) {
-  if (!ml || !ml.model_available) {
+  if (!ml || !ml.model_available || ml.prediction_status === "insufficient_evidence" || ml.predicted_role === "Undetermined") {
     return panel([
       h2("03", "Machine Learning Role Prediction", "(TF-IDF + Softmax Classifier)"),
       el("div", { class: "hint" }, [ml && ml.note ? ml.note : "Machine Learning model is loading or awaiting training."])
@@ -337,7 +337,7 @@ function renderMlPrediction(ml, targetBenchmark) {
     el("div", { class: "ml-role-title" }, [
       el("span", { style: "color:var(--text-dim);font-size:11.5px;text-transform:uppercase;letter-spacing:0.08em;font-family:'IBM Plex Mono',monospace;" }, ["Predicted Role:"]),
       el("span", { style: "color:var(--beacon);font-weight:700;" }, [predRole]),
-      el("span", { class: "prio " + (confPct >= 70 ? "high" : confPct >= 40 ? "medium" : "low"), style: "margin-left:4px;" }, [confPct + "% confidence"])
+      el("span", { class: "prio", style: "margin-left:4px;" }, [confPct + "% model probability"])
     ]),
     el("div", { class: badgeClass }, [badgeText])
   ]);
@@ -366,6 +366,7 @@ function renderMlPrediction(ml, targetBenchmark) {
   var content = [
     h2("03", "Machine Learning Role Prediction", "(Supervised TF-IDF + Logistic Classifier)"),
     header,
+    el("div", { class: "hint" }, [ml.note || "Model probabilities are not calibrated confidence or proof of career suitability."]),
     subhead("Model Probability Distribution"),
     probList
   ];
@@ -375,7 +376,7 @@ function renderMlPrediction(ml, targetBenchmark) {
     ml.top_features.forEach(function (w) {
       featDiv.appendChild(el("span", { class: "ml-feature-tag" }, [w]));
     });
-    content.push(subhead("Vocabulary Signals Detected by ML"));
+    content.push(subhead("Matching Model Vocabulary (not class contributions)"));
     content.push(featDiv);
   }
 
