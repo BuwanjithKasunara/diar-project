@@ -23,7 +23,7 @@ This mirrors the workflow diagram (`DigitalID_AI_GRP_PRJ_Worlflow.drawio`) and t
 **Machine Learning Component & Dataset:**
 - **Dataset (`backend/app/data/career_profiles_dataset.csv`)**: Contains labeled profile and resume descriptions spanning all 5 benchmark professional identities (*AI Engineer*, *Data Scientist*, *Software Engineer*, *Researcher*, *Entrepreneur*).
 - **ML Pipeline**: Employs an n-gram TF-IDF vectorizer paired with a multinomial logistic regression classifier trained with `scikit-learn`.
-- **Training & Evaluation Script (`backend/train_ml_model.py`)**: Can be run directly to evaluate 5-fold cross-validation and a seeded holdout split, saving a [dated evaluation record](docs/testing/model-evaluation.json). `--save-model` explicitly replaces the local trained artifact. Results on this repository dataset do not establish real-profile accuracy.
+- **Training & Evaluation Script (`backend/train_ml_model.py`)**: Can be run directly to evaluate 5-fold cross-validation and a seeded holdout split, outputting metrics to a JSON record. `--save-model` explicitly replaces the local trained artifact. Results on this repository dataset do not establish real-profile accuracy.
 - **Prediction Output**: Provides a role prediction, model probabilities and matching vocabulary ranked by TF-IDF weight. Vocabulary matches are not measured class contributions, and probabilities are not calibrated confidence. Empty/unmatched vocabulary receives an insufficient-evidence result; model failures preserve rule analysis. No evaluated abstention threshold is used.
 
 **Note on scope / simplifications made to get a runnable prototype:**
@@ -78,8 +78,6 @@ Example/contributor contacts may be flagged; ownership and necessity of disclosu
 not verified. Editing the latest file does not remove historical copies. Raw downloaded
 files are never saved, even with Retain extracted text; career scores/ML inputs remain
 independent. No files or profile settings are changed automatically.
-See the [decision record](docs/privacy/repository-file-scanning.md) for limits and
-the [delivery record](docs/improvements/id-9-delivery.md) for verification.
 
 ### Analysis recovery
 
@@ -91,7 +89,6 @@ a report, but browser cancellation/network failure may occur while the server
 continues and saves one. Check `/api/reports` before retrying if needed; automatic
 retries are not performed. Use the Saved reports panel to check history.
 If ML prediction fails, DIAR still returns its available rule-based analysis.
-See the [recovery delivery record](docs/improvements/id-7-delivery.md) for limits.
 
 ### Input and evidence limits
 
@@ -108,8 +105,6 @@ findings can still appear for short contact-containing text. Unknown experience 
 not treated as zero years in recommendations; estimates use explicit totals or
 year ranges in labelled experience sections and exclude education dates.
 Source coverage describes the supplied inputs, not verified account completeness.
-See the [improvement plan](docs/improvements/implementation-plan.md) and delivery
-records in [the documentation index](docs/README.md) for scope and verification.
 
 ### Backend (.venv Environment Setup)
 
@@ -212,12 +207,6 @@ then visit http://localhost:5173
 | `/api/reports` | GET | Report history (stored in SQLite) |
 | `/api/reports/{id}` | GET | Retrieve a past report |
 
-## Development documentation
-
-See [project documentation](docs/README.md), including the privacy requirement
-realignment record and staged implementation plan. The evidence foundation is Part 1;
-source-specific recommendations and independent report controls are implemented.
-
 ## Extending
 
 - Add a benchmark identity: edit `backend/app/data/benchmarks.json`.
@@ -244,11 +233,11 @@ coverage and recorded scan limitations. Retained-text exports may contain person
 information. Deleting a saved row does not erase downloads, backups or source data.
 
 Filter recommendations by career, privacy or legacy/uncategorized actions and
-priority. Original ranks remain unchanged. Suggested first steps use the existing
-first three ranked actions. Repository-file actions have a separate shortcut list;
-privacy-card links reveal actions hidden by filters. Recommendation evidence links
-jump to the recorded evidence. Historical actions without categories stay visible
-under All and Legacy / uncategorized; they are not silently reclassified.
+priority. Original ranks remain unchanged. Historical actions without categories stay
+visible under All and Legacy / uncategorized.
+
+- **Simplified Explanation Summary**: Highlights key takeaways (role match, profile completeness, GitHub activity, AI prediction, and privacy alerts) with clean visual status cards, alongside an expandable detailed technical narrative.
+- **Interactive Form Tooltips**: Input options and privacy settings feature interactive `(?)` tooltip badges that display full guidelines on click or hover, keeping the main interface clean and compact.
 
 History has no authentication or report ownership and is intended for local use.
 Shared hosting requires separately planned access control. Print styling is
@@ -263,7 +252,6 @@ profile requests or external model downloads are required after package install.
 GitHub Actions repeats installation, dependency checks, regression tests and
 `python train_ml_model.py --output evaluation-ci.json` on main pushes and PRs.
 
-See [model evaluation and dataset limits](docs/testing/model-evaluation.md).
 The dataset's original source, consent and license are unknown. Evaluation removes
 normalized exact duplicates before splitting, records class counts and split indices,
 and screens holdout near duplicates; shared templates and semantic leakage remain
