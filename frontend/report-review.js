@@ -86,16 +86,6 @@ function recommendationLink(rec, text) {
 function renderRecommendationNavigation(recs) {
   recs = recs || [];
   var wrap = el('div', {id:'recommendation-navigation'}, []);
-  wrap.appendChild(subhead('Suggested first steps'));
-  var first = el('div', {}, []);
-  recs.slice(0, 3).forEach(function (rec) { first.appendChild(el('p', {}, [recommendationLink(rec, rec.recommendation)])); });
-  if (!recs.length) first.appendChild(el('p', {class:'hint'}, ['No recommended actions recorded.']));
-  wrap.appendChild(first);
-  var privacy = recs.filter(function (rec) { return rec.source === 'github_repository_file'; });
-  if (privacy.length) {
-    wrap.appendChild(subhead('Public repository file actions'));
-    privacy.forEach(function (rec) { wrap.appendChild(el('p', {}, [recommendationLink(rec, rec.recommendation)])); });
-  }
   [['category', 'Recommendation category', ['all','career','privacy','legacy']], ['priority', 'Recommendation priority', ['all','high','medium','low']]].forEach(function (spec) {
     var select = el('select', {id:'filter-' + spec[0], onChange:function (event) {
       review[spec[0]] = event.target.value; renderResultsPanel();
